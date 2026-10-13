@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Su GitHub Pages (sito di progetto) l'app vive in /<nome-repo>/: la Action passa BASE_PATH.
 const base = process.env.BASE_PATH ?? '/'
+
+// Versione MAJOR.MINOR da package.json (unica fonte): MAJOR = nuove funzionalità, MINOR = correzioni.
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8')) as { version: string }
+const appVersion = pkg.version.split('.').slice(0, 2).join('.')
 
 const TEXT_EXTENSIONS = [
   '.txt', '.log', '.md', '.markdown', '.json', '.jsonc', '.js', '.mjs', '.cjs', '.jsx',
@@ -15,6 +20,7 @@ const TEXT_EXTENSIONS = [
 
 export default defineConfig({
   base,
+  define: { __APP_VERSION__: JSON.stringify(appVersion) },
   build: { chunkSizeWarningLimit: 800 },
   plugins: [
     react(),

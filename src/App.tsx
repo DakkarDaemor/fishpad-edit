@@ -1,26 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import type { EditorState, TransactionSpec } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
-import { foldAll, foldEffect, unfoldAll, unfoldEffect } from '@codemirror/language'
-import { openSearchPanel } from '@codemirror/search'
-import {
-  createEditorState,
-  languageEffects,
-  setUpdateHandler,
-  settingsEffects,
-  type EditorSettings,
-} from './editor/setup'
-import { foldLevel, serializeFolds } from './editor/folding'
-import {
-  DEFAULT_INDENT,
-  convertIndentChanges,
-  detectIndent,
-  indentCompartment,
-  indentExtension,
-  indentLabel,
-  type Indent,
-} from './editor/indentation'
-import { detectByContent, detectByFilename, extensionFor, languageNames } from './editor/languages'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { EditorView } from '@codemirror/view'
+import { redo, selectAll, toggleComment, undo } from '@codemirror/commands'
+import { foldAll, unfoldAll } from '@codemirror/language'
+import { gotoLine, openSearchPanel } from '@codemirror/search'
+import type { EditorSettings } from './editor/setup'
+import { foldLevel } from './editor/folding'
+import { detectByFilename, extensionFor } from './editor/languages'
 import {
   ensurePermission,
   filesFromDrop,
@@ -39,240 +24,66 @@ import {
   loadRecents,
   loadSession,
   loadSettings,
-  saveSession,
   saveSettings,
-  type Eol,
   type RecentFile,
   type Settings,
   type ThemeMode,
 } from './store'
+import { Workbench } from './workbench/Workbench'
+import { MenuBar, type MenuDef } from './components/Menu'
+import { SplitView } from './components/SplitView'
+import { EditorPane } from './components/EditorPane'
+import { StatusBar } from './components/StatusBar'
 
-interface Tab {
-  id: string
-  name: string
-  lang: string | null
-  /** true finché il linguaggio non è stato scelto a mano né dedotto dal nome file */
-  langAuto: boolean
-  indent: Indent
-  /** true finché l'indentazione non è stata scelta a mano: viene rilevata dal contenuto */
-  indentAuto: boolean
-  dirty: boolean
-  eol: Eol
-  handle?: FileSystemFileHandle
-}
-
-interface NewTabInput {
-  id?: string
-  name: string
-  content: string
-  eol: Eol
-  handle?: FileSystemFileHandle
-  lang?: string | null
-  langAuto?: boolean
-  indent?: Indent
-  indentAuto?: boolean
-  dirty?: boolean
-  cursor?: number
-  folds?: Array<[number, number]>
-}
-
+const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
-const isBlank = (t: Tab, st?: EditorState) => !t.handle && !t.dirty && (!st || st.doc.length === 0)
+
+function toEditorSettings(s: Settings, systemDark: boolean): EditorSettings {
+  return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap }
+}
 
 export default function App() {
-  const [tabs, setTabsState] = useState<Tab[]>([])
-  const [activeId, setActiveIdState] = useState<string | null>(null)
+  const [wb] = useState(() => new Workbench(toEditorSettings(DEFAULT_SETTINGS, darkQuery.matches)))
+  const snap = useSyncExternalStore(wb.subscribe, wb.getSnapshot)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [systemDark, setSystemDark] = useState(darkQuery.matches)
-  const [status, setStatus] = useState({ line: 1, col: 1, sel: 0, lines: 1 })
   const [recents, setRecents] = useState<RecentFile[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const toastTimer = useRef<number | undefined>(undefined)
 
-  const hostRef = useRef<HTMLDivElement>(null)
-  const viewRef = useRef<EditorView | null>(null)
-  const states = useRef(new Map<string, EditorState>())
-  const scrolls = useRef(new Map<string, number>())
-  const tabsRef = useRef<Tab[]>([])
-  const activeRef = useRef<string | null>(null)
-  const settingsRef = useRef(settings)
-  const systemDarkRef = useRef(systemDark)
-  const timers = useRef<{ persist?: number; detect?: number; toast?: number }>({})
-  const menus = useRef<HTMLDetailsElement[]>([])
-
-  // ---------- helpers di stato (ref + state sincronizzati: le azioni leggono sempre il valore più recente) ----------
-
-  function updateTabs(fn: (t: Tab[]) => Tab[]) {
-    tabsRef.current = fn(tabsRef.current)
-    setTabsState(tabsRef.current)
-  }
-  function patchTab(id: string, patch: Partial<Tab>) {
-    updateTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)))
-  }
-  const findTab = (id: string | null) => tabsRef.current.find((t) => t.id === id)
-
-  function editorSettings(): EditorSettings {
-    const s = settingsRef.current
-    const dark = s.theme === 'dark' || (s.theme === 'system' && systemDarkRef.current)
-    return { dark, fontSize: s.fontSize, wrap: s.wrap }
-  }
-
-  function flash(msg: string) {
+  function flash(msg: string | null) {
+    if (!msg) return
     setToast(msg)
-    clearTimeout(timers.current.toast)
-    timers.current.toast = window.setTimeout(() => setToast(null), 2200)
-  }
-
-  function closeMenus() {
-    menus.current.forEach((m) => m && (m.open = false))
-  }
-
-  // ---------- persistenza sessione ----------
-
-  async function persistNow() {
-    clearTimeout(timers.current.persist)
-    const snapshot = tabsRef.current.flatMap((t) => {
-      const st = states.current.get(t.id)
-      if (!st) return []
-      return [{ ...t, content: st.doc.toString(), cursor: st.selection.main.head, folds: serializeFolds(st) }]
-    })
-    await saveSession({ tabs: snapshot, activeId: activeRef.current })
-  }
-  function schedulePersist() {
-    clearTimeout(timers.current.persist)
-    timers.current.persist = window.setTimeout(persistNow, 600)
-  }
-
-  // ---------- editor ----------
-
-  function dispatchTo(id: string, spec: TransactionSpec) {
-    const view = viewRef.current
-    if (view && activeRef.current === id) view.dispatch(spec)
-    else {
-      const st = states.current.get(id)
-      if (st) states.current.set(id, st.update(spec).state)
-    }
-  }
-
-  async function setLanguage(id: string, lang: string | null, auto: boolean) {
-    patchTab(id, { lang, langAuto: auto })
-    const effects = await languageEffects(lang)
-    if (states.current.has(id)) dispatchTo(id, { effects })
-    schedulePersist()
-  }
-
-  function updateStatus(st: EditorState) {
-    const head = st.selection.main.head
-    const line = st.doc.lineAt(head)
-    const sel = st.selection.ranges.reduce((n, r) => n + (r.to - r.from), 0)
-    setStatus({ line: line.number, col: head - line.from + 1, sel, lines: st.doc.lines })
-  }
-
-  function activate(id: string) {
-    const view = viewRef.current
-    const st = states.current.get(id)
-    if (!view || !st) return
-    const prev = activeRef.current
-    if (prev && prev !== id && states.current.has(prev)) scrolls.current.set(prev, view.scrollDOM.scrollTop)
-    activeRef.current = id
-    setActiveIdState(id)
-    view.setState(st)
-    view.dispatch({ effects: settingsEffects(editorSettings()) })
-    const top = scrolls.current.get(id)
-    if (top != null) requestAnimationFrame(() => (view.scrollDOM.scrollTop = top))
-    else view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })
-    updateStatus(view.state)
-    view.focus()
-    schedulePersist()
-  }
-
-  function addTab(input: NewTabInput, activateIt = true): Tab {
-    const id = input.id ?? crypto.randomUUID()
-    const byName = input.handle ? detectByFilename(input.name) : null
-    const lang = input.lang !== undefined ? input.lang : (byName ?? detectByContent(input.content))
-    const langAuto = input.langAuto ?? !byName
-    const detected = input.indent ? null : detectIndent(input.content)
-    const indent = input.indent ?? detected ?? DEFAULT_INDENT
-    const indentAuto = input.indentAuto ?? true
-    states.current.set(
-      id,
-      createEditorState({ content: input.content, settings: editorSettings(), cursor: input.cursor, folds: input.folds, indent }),
-    )
-    const tab: Tab = {
-      id,
-      name: input.name,
-      lang,
-      langAuto,
-      indent,
-      indentAuto,
-      dirty: input.dirty ?? false,
-      eol: input.eol,
-      handle: input.handle,
-    }
-    updateTabs((ts) => [...ts, tab])
-    if (lang) void setLanguage(id, lang, langAuto)
-    if (activateIt) activate(id)
-    schedulePersist()
-    return tab
-  }
-
-  function newTab() {
-    const used = new Set(tabsRef.current.map((t) => t.name))
-    let n = 1
-    while (used.has(`Senza titolo ${n}`)) n++
-    addTab({ name: `Senza titolo ${n}`, content: '', eol: 'LF', lang: null, langAuto: true })
-  }
-
-  function closeTab(id: string, force = false) {
-    const tab = findTab(id)
-    if (!tab) return
-    if (!force && tab.dirty && !confirm(`"${tab.name}" ha modifiche non salvate. Chiudere comunque?`)) return
-    const idx = tabsRef.current.findIndex((t) => t.id === id)
-    updateTabs((ts) => ts.filter((t) => t.id !== id))
-    states.current.delete(id)
-    scrolls.current.delete(id)
-    if (activeRef.current === id) {
-      const rest = tabsRef.current
-      if (rest.length) activate(rest[Math.min(idx, rest.length - 1)].id)
-      else {
-        activeRef.current = null
-        newTab()
-      }
-    }
-    schedulePersist()
-  }
-
-  function cycleTab(delta: number) {
-    const ts = tabsRef.current
-    const i = ts.findIndex((t) => t.id === activeRef.current)
-    if (ts.length > 1) activate(ts[(i + delta + ts.length) % ts.length].id)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }
 
   // ---------- file ----------
 
-  async function findTabByHandle(handle: FileSystemFileHandle) {
-    for (const t of tabsRef.current) {
-      if (t.handle && (await t.handle.isSameEntry(handle).catch(() => false))) return t
-    }
-    return undefined
-  }
-
   async function openFiles(files: OpenedFile[]) {
     if (!files.length) return
-    const only = tabsRef.current.length === 1 ? tabsRef.current[0] : undefined
-    const blankId = only && isBlank(only, states.current.get(only.id)) ? only.id : null
+    // una sola tab vuota e intatta nel pannello attivo viene sostituita dal primo file aperto
+    const pane = wb.activePane
+    const blankId = pane.docIds.length === 1 && wb.isBlank(pane.docIds[0]) ? pane.docIds[0] : null
     for (const f of files) {
       if (f.handle) {
-        const existing = await findTabByHandle(f.handle)
+        const existing = await wb.findByHandle(f.handle)
         if (existing) {
-          activate(existing.id)
+          const where = wb.activePane.docIds.includes(existing.id) ? wb.activePane.id : null
+          if (where) wb.activate(where, existing.id)
+          else {
+            // aperto in un altro pannello: lo si porta in primo piano lì
+            const other = [...wb.getSnapshot().panes.values()].find((p) => p.docIds.includes(existing.id))!
+            wb.activate(other.id, existing.id)
+          }
           continue
         }
         setRecents(await addRecent(f.handle))
       }
-      addTab(f)
+      wb.addDoc(f)
     }
-    if (blankId && tabsRef.current.length > 1) closeTab(blankId, true)
+    if (blankId && wb.activePane.docIds.length > 1) wb.closeTab(wb.activePane.id, blankId, true)
   }
 
   async function openDialog() {
@@ -284,7 +95,6 @@ export default function App() {
   }
 
   async function openRecent(r: RecentFile) {
-    closeMenus()
     try {
       if (!(await ensurePermission(r.handle, 'read'))) return
       await openFiles([await readHandle(r.handle)])
@@ -293,166 +103,114 @@ export default function App() {
     }
   }
 
-  async function save(id = activeRef.current, forceSaveAs = false) {
-    const tab = findTab(id)
-    const st = id ? states.current.get(id) : undefined
-    if (!tab || !st || !id) return
-    const data = serialize(st.doc.toString(), tab.eol)
+  async function save(docId = wb.activeDoc?.id, forceSaveAs = false) {
+    const doc = wb.doc(docId)
+    if (!doc) return
+    const data = serialize(wb.content(doc.id), doc.eol)
     try {
-      if (tab.handle && !forceSaveAs) {
-        await writeHandle(tab.handle, data)
-        patchTab(id, { dirty: false })
-        flash(`Salvato: ${tab.name}`)
-      } else {
-        const suggested = tab.name.includes('.') ? tab.name : `${tab.name}${extensionFor(tab.lang)}`
-        const handle = await saveAs(suggested, data)
-        if (handle === null) return // annullato
-        if (handle) {
-          patchTab(id, { handle, name: handle.name, dirty: false })
-          setRecents(await addRecent(handle))
-          const byName = detectByFilename(handle.name)
-          if (byName && byName !== tab.lang) void setLanguage(id, byName, false)
-          else if (byName) patchTab(id, { langAuto: false })
-          flash(`Salvato: ${handle.name}`)
-        } else {
-          patchTab(id, { dirty: false })
-          flash(`Scaricato: ${suggested}`)
-        }
+      if (doc.handle && !forceSaveAs) {
+        await writeHandle(doc.handle, data)
+        wb.patchDoc(doc.id, { dirty: false })
+        flash(`Salvato: ${doc.name}`)
+        return
       }
-      schedulePersist()
+      const suggested = doc.name.includes('.') ? doc.name : `${doc.name}${extensionFor(doc.lang)}`
+      const handle = await saveAs(suggested, data)
+      if (handle === null) return // annullato
+      if (handle) {
+        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false })
+        setRecents(await addRecent(handle))
+        const byName = detectByFilename(handle.name)
+        if (byName && byName !== doc.lang) void wb.setLanguage(doc.id, byName, false)
+        else if (byName) wb.patchDoc(doc.id, { langAuto: false })
+        flash(`Salvato: ${handle.name}`)
+      } else {
+        wb.patchDoc(doc.id, { dirty: false })
+        flash(`Scaricato: ${suggested}`)
+      }
     } catch (err) {
       flash(`Errore salvataggio: ${(err as Error).message}`)
     }
   }
 
-  function setIndent(id: string, indent: Indent, auto: boolean) {
-    patchTab(id, { indent, indentAuto: auto })
-    dispatchTo(id, { effects: indentCompartment.reconfigure(indentExtension(indent)) })
-    schedulePersist()
+  async function saveAll() {
+    for (const d of wb.allDocs) if (d.dirty) await save(d.id)
   }
 
-  function chooseIndent(indent: Indent) {
-    closeMenus()
-    const id = activeRef.current
-    if (id) setIndent(id, indent, false)
-    viewRef.current?.focus()
+  function closeActiveTab() {
+    const p = wb.activePane
+    if (p.activeDocId) wb.closeTab(p.id, p.activeDocId)
   }
 
-  function redetectIndent() {
-    closeMenus()
-    const id = activeRef.current
-    const st = id ? states.current.get(id) : undefined
-    if (!id || !st) return
-    const found = detectIndent(st.doc.toString())
-    setIndent(id, found ?? DEFAULT_INDENT, true)
-    flash(found ? `Rilevato: ${indentLabel(found)}` : 'Nessuna indentazione rilevata, uso il default')
+  // ---------- comandi sull'editor attivo ----------
+
+  function run(cmd: (v: EditorView) => boolean) {
+    const v = wb.activeView
+    if (!v) return
+    cmd(v)
+    v.focus()
   }
 
-  /** Riscrive l'indentazione del file nello stile scelto (annullabile con Ctrl+Z). */
-  function convertIndent(to: Indent) {
-    closeMenus()
-    const id = activeRef.current
-    const tab = findTab(id)
-    const view = viewRef.current
-    if (!id || !tab || !view) return
-    const changes = convertIndentChanges(view.state, tab.indent, to)
-    setIndent(id, to, false)
-    if (changes.length) view.dispatch({ changes, userEvent: 'input.indent' })
-    flash(changes.length ? `Convertite ${changes.length} righe in ${indentLabel(to)}` : 'Niente da convertire')
-    view.focus()
-  }
+  const selectionText = (v: EditorView) =>
+    v.state.selection.ranges.filter((r) => !r.empty).map((r) => v.state.sliceDoc(r.from, r.to)).join('\n')
 
-  function toggleEol() {
-    const id = activeRef.current
-    const tab = findTab(id)
-    if (!tab || !id) return
-    patchTab(id, { eol: tab.eol === 'LF' ? 'CRLF' : 'LF', dirty: true })
-    schedulePersist()
-  }
-
-  function runOnView(cmd: (v: EditorView) => boolean) {
-    closeMenus()
-    const v = viewRef.current
-    if (v) {
-      cmd(v)
-      v.focus()
+  async function copy(cut: boolean) {
+    const v = wb.activeView
+    if (!v) return
+    const text = selectionText(v)
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      if (cut) v.dispatch(v.state.replaceSelection(''), { userEvent: 'delete.cut' })
+    } catch {
+      flash('Appunti non disponibili: usa Ctrl+C / Ctrl+X')
     }
+    v.focus()
   }
 
-  // Le azioni sono ricreate a ogni render ma leggono solo ref: gli handler globali passano da qui.
-  const actions = useRef({ newTab, openDialog, save, closeTab, cycleTab, openFiles })
-  actions.current = { newTab, openDialog, save, closeTab, cycleTab, openFiles }
+  async function paste() {
+    const v = wb.activeView
+    if (!v) return
+    try {
+      const text = await navigator.clipboard.readText()
+      v.dispatch(v.state.replaceSelection(text), { userEvent: 'input.paste', scrollIntoView: true })
+    } catch {
+      flash('Appunti non disponibili: usa Ctrl+V')
+    }
+    v.focus()
+  }
+
+  const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
+  const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
+  const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
+
+  // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
+  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap })
+  useEffect(() => {
+    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap }
+  })
 
   // ---------- inizializzazione ----------
 
   useEffect(() => {
-    const view = new EditorView({ parent: hostRef.current! })
-    const stateMap = states.current
-    viewRef.current = view
     let cancelled = false
-
-    setUpdateHandler((u) => {
-      const id = activeRef.current
-      if (!id) return
-      states.current.set(id, u.state)
-      if (u.docChanged) {
-        const tab = findTab(id)
-        if (tab && !tab.dirty) patchTab(id, { dirty: true })
-        if (tab?.langAuto || tab?.indentAuto) {
-          clearTimeout(timers.current.detect)
-          timers.current.detect = window.setTimeout(() => {
-            const t = findTab(id)
-            const st = states.current.get(id)
-            if (!t || !st) return
-            const text = st.doc.toString()
-            // Finché il linguaggio è automatico può anche "salire" di livello (es. JavaScript → TSX mentre scrivi)
-            if (t.langAuto) {
-              const lang = detectByContent(text)
-              if (lang && lang !== t.lang) void setLanguage(id, lang, true)
-            }
-            if (t.indentAuto) {
-              const found = detectIndent(text)
-              if (found && (found.tabs !== t.indent.tabs || found.size !== t.indent.size)) setIndent(id, found, true)
-            }
-          }, 500)
-        }
-        schedulePersist()
-      } else if (u.transactions.some((tr) => tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) {
-        schedulePersist()
-      }
-      if (u.docChanged || u.selectionSet) updateStatus(u.state)
-    })
-
     ;(async () => {
       const [session, savedSettings, savedRecents] = await Promise.all([loadSession(), loadSettings(), loadRecents()])
       if (cancelled) return
-      settingsRef.current = savedSettings
       setSettings(savedSettings)
       setRecents(savedRecents)
-      if (session?.tabs.length) {
-        for (const t of session.tabs) addTab(t, false)
-        const target = session.tabs.some((t) => t.id === session.activeId) ? session.activeId! : session.tabs[0].id
-        activate(target)
-      } else {
-        newTab()
-      }
+      wb.setEditorSettings(toEditorSettings(savedSettings, darkQuery.matches))
+      if (!session || !wb.restore(session)) wb.newUntitled()
       // File aperti dal sistema operativo ("Apri con…") nella PWA installata
       window.launchQueue?.setConsumer(async (params) => {
         const handles = params.files.filter((h): h is FileSystemFileHandle => h.kind === 'file')
         if (handles.length) await actions.current.openFiles(await Promise.all(handles.map(readHandle)))
       })
     })()
-
     return () => {
       cancelled = true
-      view.destroy()
-      viewRef.current = null
-      stateMap.clear()
-      tabsRef.current = []
-      activeRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [wb])
 
   // Scorciatoie globali + salvataggio immediato quando la finestra perde il focus/si chiude
   useEffect(() => {
@@ -463,20 +221,21 @@ export default function App() {
       let handled = true
       if (mod && !e.altKey && code === 'KeyS') void a.save(undefined, e.shiftKey)
       else if (mod && !e.altKey && code === 'KeyO') void a.openDialog()
-      else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyN') a.newTab()
-      else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyW') {
-        if (activeRef.current) a.closeTab(activeRef.current)
-      } else if (e.ctrlKey && e.key === 'Tab') a.cycleTab(e.shiftKey ? -1 : 1)
-      else if (e.ctrlKey && e.key === 'PageDown') a.cycleTab(1)
-      else if (e.ctrlKey && e.key === 'PageUp') a.cycleTab(-1)
+      else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyN') wb.newUntitled()
+      else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyW') a.closeActiveTab()
+      else if (e.ctrlKey && e.key === 'Tab') wb.cycleTab(e.shiftKey ? -1 : 1)
+      else if (e.ctrlKey && e.key === 'PageDown') wb.cycleTab(1)
+      else if (e.ctrlKey && e.key === 'PageUp') wb.cycleTab(-1)
+      else if (mod && !e.altKey && e.key === '\\') void wb.split('row')
+      else if (e.altKey && !mod && code === 'KeyZ') a.toggleWrap()
       else handled = false
       if (handled) {
         e.preventDefault()
         e.stopPropagation()
       }
     }
-    const flush = () => document.visibilityState === 'hidden' && void persistNow()
-    const onPageHide = () => void persistNow()
+    const flush = () => document.visibilityState === 'hidden' && void wb.persistNow()
+    const onPageHide = () => void wb.persistNow()
     window.addEventListener('keydown', onKey, true)
     document.addEventListener('visibilitychange', flush)
     window.addEventListener('pagehide', onPageHide)
@@ -485,8 +244,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', flush)
       window.removeEventListener('pagehide', onPageHide)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [wb])
 
   // Drag & drop di file sulla finestra (intercettato prima che CodeMirror lo inserisca come testo)
   useEffect(() => {
@@ -519,7 +277,6 @@ export default function App() {
       window.removeEventListener('dragleave', onLeave, true)
       window.removeEventListener('drop', onDrop, true)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Tema di sistema
@@ -529,175 +286,168 @@ export default function App() {
     return () => darkQuery.removeEventListener('change', onChange)
   }, [])
 
-  // Impostazioni → editor attivo (le altre tab si allineano quando vengono attivate)
+  // Impostazioni → editor
   useEffect(() => {
-    settingsRef.current = settings
-    systemDarkRef.current = systemDark
-    const es = editorSettings()
+    const es = toEditorSettings(settings, systemDark)
     document.documentElement.dataset.theme = es.dark ? 'dark' : 'light'
-    viewRef.current?.dispatch({ effects: settingsEffects(es) })
+    wb.setEditorSettings(es)
     void saveSettings(settings)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, systemDark])
+  }, [wb, settings, systemDark])
 
-  const active = tabs.find((t) => t.id === activeId)
+  const activePane = snap.panes.get(snap.activePaneId)
+  const active = snap.docs.get(activePane?.activeDocId ?? '')
 
   useEffect(() => {
     document.title = active ? `${active.dirty ? '● ' : ''}${active.name} — Fishpad Edit` : 'Fishpad Edit'
   }, [active])
 
-  const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) =>
-    setSettings((s) => ({ ...s, [key]: value }))
+  // ---------- menu ----------
 
-  const menuRef = (i: number) => (el: HTMLDetailsElement | null) => {
-    if (el) menus.current[i] = el
-  }
+  const multiPane = snap.panes.size > 1
+  const anyDirty = [...snap.docs.values()].some((d) => d.dirty)
+
+  const menus: MenuDef[] = [
+    {
+      label: 'File',
+      items: [
+        { label: 'Nuovo', shortcut: 'Alt+N', action: () => wb.newUntitled() },
+        { label: 'Apri…', shortcut: 'Ctrl+O', action: () => void openDialog() },
+        {
+          label: 'Apri recente',
+          submenu: hasFsAccess
+            ? [
+                ...recents.map((r) => ({ label: r.name, action: () => void openRecent(r) })),
+                ...(recents.length
+                  ? [
+                      'separator' as const,
+                      {
+                        label: 'Svuota lista',
+                        danger: true,
+                        action: async () => {
+                          if (confirm('Svuotare la lista dei file recenti?')) setRecents(await clearRecents())
+                        },
+                      },
+                    ]
+                  : []),
+              ]
+            : [],
+        },
+        'separator',
+        { label: 'Salva', shortcut: 'Ctrl+S', disabled: !active, action: () => void save() },
+        { label: 'Salva con nome…', shortcut: 'Ctrl+Shift+S', disabled: !active, action: () => void save(undefined, true) },
+        { label: 'Salva tutto', disabled: !anyDirty, action: () => void saveAll() },
+        'separator',
+        { label: 'Chiudi tab', shortcut: 'Alt+W', action: closeActiveTab },
+        { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
+      ],
+    },
+    {
+      label: 'Modifica',
+      items: [
+        { label: 'Annulla', shortcut: 'Ctrl+Z', action: () => run(undo) },
+        { label: 'Ripeti', shortcut: 'Ctrl+Y', action: () => run(redo) },
+        'separator',
+        { label: 'Taglia', shortcut: 'Ctrl+X', action: () => void copy(true) },
+        { label: 'Copia', shortcut: 'Ctrl+C', action: () => void copy(false) },
+        { label: 'Incolla', shortcut: 'Ctrl+V', action: () => void paste() },
+        { label: 'Seleziona tutto', shortcut: 'Ctrl+A', action: () => run(selectAll) },
+        'separator',
+        { label: 'Cerca…', shortcut: 'Ctrl+F', action: () => run(openSearchPanel) },
+        { label: 'Sostituisci…', shortcut: 'Ctrl+H', action: () => run(openSearchPanel) },
+        { label: 'Vai alla riga…', shortcut: 'Ctrl+Alt+G', action: () => run(gotoLine) },
+        'separator',
+        { label: 'Commenta / decommenta', shortcut: 'Ctrl+/', action: () => run(toggleComment) },
+      ],
+    },
+    {
+      label: 'Visualizza',
+      items: [
+        { label: 'Dividi a destra', shortcut: 'Ctrl+\\', action: () => void wb.split('row') },
+        { label: 'Dividi in basso', action: () => void wb.split('column') },
+        { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
+        'separator',
+        {
+          label: 'Folding',
+          submenu: [
+            { label: 'Chiudi tutto', shortcut: 'Ctrl+K Ctrl+0', action: () => run(foldAll) },
+            { label: 'Apri tutto', shortcut: 'Ctrl+K Ctrl+J', action: () => run(unfoldAll) },
+            'separator',
+            ...[1, 2, 3, 4, 5].map((n) => ({ label: `Chiudi livello ${n}`, shortcut: `Ctrl+K Ctrl+${n}`, action: () => run(foldLevel(n)) })),
+          ],
+        },
+        'separator',
+        {
+          label: 'Tema',
+          submenu: (
+            [
+              ['system', 'Sistema'],
+              ['light', 'Chiaro'],
+              ['dark', 'Scuro'],
+            ] as Array<[ThemeMode, string]>
+          ).map(([value, label]) => ({ label, checked: settings.theme === value, action: () => setSetting('theme', value) })),
+        },
+        { label: 'Ingrandisci testo', action: () => zoom(1) },
+        { label: 'Riduci testo', action: () => zoom(-1) },
+        { label: `Dimensione predefinita (${DEFAULT_SETTINGS.fontSize})`, action: () => setSetting('fontSize', DEFAULT_SETTINGS.fontSize) },
+        'separator',
+        { label: 'A capo automatico', shortcut: 'Alt+Z', checked: settings.wrap, action: toggleWrap },
+      ],
+    },
+    {
+      label: 'Aiuto',
+      items: [
+        { heading: `Fishpad Edit v${__APP_VERSION__}` },
+        { label: 'Novità delle versioni', action: () => window.open(`${REPO_URL}/blob/main/CHANGELOG.md`, '_blank', 'noopener') },
+        { label: 'Scorciatoie da tastiera', action: () => window.open(`${REPO_URL}#scorciatoie`, '_blank', 'noopener') },
+      ],
+    },
+  ]
 
   return (
     <div className={`app${dragging ? ' dragging' : ''}`}>
-      <header className="toolbar">
+      <header className="titlebar">
         <span className="brand">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={18} height={18} />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={16} height={16} />
           Fishpad Edit
+          <span className="version">v{__APP_VERSION__}</span>
         </span>
-        <button onClick={() => newTab()} title="Nuovo (Ctrl+N / Alt+N)">Nuovo</button>
-        <button onClick={() => void openDialog()} title="Apri (Ctrl+O)">Apri</button>
-        <button onClick={() => void save()} title="Salva (Ctrl+S)">Salva</button>
-        <button onClick={() => void save(undefined, true)} title="Salva con nome (Ctrl+Shift+S)">Salva come…</button>
-
-        <details className="menu" ref={menuRef(0)}>
-          <summary>Recenti</summary>
-          <div className="menu-panel">
-            {!hasFsAccess && <p className="menu-empty">Non disponibile in questo browser</p>}
-            {hasFsAccess && recents.length === 0 && <p className="menu-empty">Nessun file recente</p>}
-            {recents.map((r) => (
-              <button key={r.openedAt + r.name} onClick={() => void openRecent(r)}>
-                {r.name}
-              </button>
-            ))}
-            {recents.length > 0 && (
-              <button
-                className="danger"
-                onClick={async () => {
-                  closeMenus()
-                  if (confirm('Svuotare la lista dei file recenti?')) setRecents(await clearRecents())
-                }}
-              >
-                Svuota lista
-              </button>
-            )}
-          </div>
-        </details>
-
-        <details className="menu" ref={menuRef(1)}>
-          <summary>Folding</summary>
-          <div className="menu-panel">
-            <button onClick={() => runOnView(foldAll)}>Chiudi tutto <kbd>Ctrl+K Ctrl+0</kbd></button>
-            <button onClick={() => runOnView(unfoldAll)}>Apri tutto <kbd>Ctrl+K Ctrl+J</kbd></button>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} onClick={() => runOnView(foldLevel(n))}>
-                Chiudi livello {n} <kbd>Ctrl+K Ctrl+{n}</kbd>
-              </button>
-            ))}
-          </div>
-        </details>
-
-        <button onClick={() => runOnView(openSearchPanel)} title="Cerca e sostituisci (Ctrl+F)">Cerca</button>
-
+        <MenuBar menus={menus} />
         <div className="spacer" />
-
-        <label className="inline">
-          Tema
-          <select value={settings.theme} onChange={(e) => setSetting('theme', e.target.value as ThemeMode)}>
-            <option value="system">Sistema</option>
-            <option value="light">Chiaro</option>
-            <option value="dark">Scuro</option>
-          </select>
-        </label>
-        <div className="inline" title="Dimensione font">
-          <button onClick={() => setSetting('fontSize', Math.max(10, settings.fontSize - 1))}>A−</button>
-          <span className="font-size">{settings.fontSize}</span>
-          <button onClick={() => setSetting('fontSize', Math.min(32, settings.fontSize + 1))}>A+</button>
-        </div>
-        <label className="inline">
-          <input type="checkbox" checked={settings.wrap} onChange={(e) => setSetting('wrap', e.target.checked)} />
-          A capo
-        </label>
+        <span className="font-size" title="Dimensione del testo">{settings.fontSize}px</span>
       </header>
 
-      <nav className="tabs" onDoubleClick={(e) => e.target === e.currentTarget && newTab()}>
-        {tabs.map((t) => (
-          <div
-            key={t.id}
-            className={`tab${t.id === activeId ? ' active' : ''}`}
-            title={t.handle ? t.name : `${t.name} (non salvato su disco)`}
-            onClick={() => activate(t.id)}
-            onAuxClick={(e) => e.button === 1 && closeTab(t.id)}
-          >
-            <span className="tab-name">{t.name}</span>
-            <button
-              className={`tab-close${t.dirty ? ' dirty' : ''}`}
-              aria-label={`Chiudi ${t.name}`}
-              onClick={(e) => {
-                e.stopPropagation()
-                closeTab(t.id)
-              }}
-            >
-              <span className="dot">●</span>
-              <span className="x">×</span>
-            </button>
-          </div>
-        ))}
-        <button className="tab-new" onClick={() => newTab()} aria-label="Nuova tab">+</button>
-      </nav>
+      <main className="workspace">
+        <SplitView
+          layout={snap.layout}
+          onResize={(path, sizes) => wb.resize(path, sizes)}
+          renderPane={(paneId) => {
+            const pane = snap.panes.get(paneId)
+            return pane ? (
+              <EditorPane
+                key={paneId}
+                wb={wb}
+                pane={pane}
+                docs={snap.docs}
+                active={multiPane && paneId === snap.activePaneId}
+                multiPane={multiPane}
+              />
+            ) : null
+          }}
+        />
+      </main>
 
-      <main className="editor" ref={hostRef} />
-
-      <footer className="statusbar">
-        <span>
-          Ln {status.line}, Col {status.col}
-          {status.sel > 0 && ` (${status.sel} selezionati)`}
-        </span>
-        <span>{status.lines} righe</span>
-        {!hasFsAccess && <span className="warn" title="Usa Chrome o Edge per salvare direttamente su disco">Modalità ridotta</span>}
-        <div className="spacer" />
-        {active && (
-          <>
-            <select
-              value={active.lang ?? ''}
-              onChange={(e) => void setLanguage(active.id, e.target.value || null, false)}
-              title="Linguaggio"
-            >
-              <option value="">Testo semplice</option>
-              {languageNames.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-            <details className="menu menu-up" ref={menuRef(2)}>
-              <summary title={active.indentAuto ? 'Indentazione (rilevata dal contenuto)' : 'Indentazione (scelta a mano)'}>{indentLabel(active.indent)}{active.indentAuto ? '' : ' •'}</summary>
-              <div className="menu-panel">
-                <p className="menu-title">Usa per questo file</p>
-                {[false, true].map((tabs) =>
-                  [2, 4, 8].map((size) => (
-                    <button key={`${tabs}${size}`} onClick={() => chooseIndent({ tabs, size })}>
-                      {indentLabel({ tabs, size })}
-                      {active.indent.tabs === tabs && active.indent.size === size && <kbd>✓</kbd>}
-                    </button>
-                  )),
-                )}
-                <button onClick={redetectIndent}>Rileva dal contenuto</button>
-                <p className="menu-title">Converti il file in</p>
-                <button onClick={() => convertIndent({ tabs: true, size: active.indent.size })}>Tab (larghezza {active.indent.size})</button>
-                {[2, 4].map((size) => (
-                  <button key={size} onClick={() => convertIndent({ tabs: false, size })}>Spazi: {size}</button>
-                ))}
-              </div>
-            </details>
-            <button onClick={toggleEol} title="Fine riga (clic per cambiare)">{active.eol}</button>
-            <span>UTF-8</span>
-          </>
-        )}
-      </footer>
+      <StatusBar
+        doc={active}
+        status={snap.status}
+        onLanguage={(lang) => active && void wb.setLanguage(active.id, lang, false)}
+        onIndent={(indent) => {
+          if (active) wb.setIndent(active.id, indent, false)
+          wb.activeView?.focus()
+        }}
+        onRedetectIndent={() => flash(wb.redetectIndent())}
+        onConvertIndent={(to) => flash(wb.convertIndent(to))}
+        onToggleEol={() => wb.toggleEol()}
+      />
 
       {toast && <div className="toast" role="status">{toast}</div>}
       {dragging && <div className="drop-overlay">Rilascia per aprire</div>}

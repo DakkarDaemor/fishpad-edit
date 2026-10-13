@@ -6,7 +6,9 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 
 ## Funzionalità (MVP)
 
-- **Tab multiple**: la sessione viene salvata in automatico in IndexedDB. Alla riapertura ritrovi contenuto, cursore e blocchi chiusi, anche per le tab non salvate su disco.
+- **Menu tradizionale** (File, Modifica, Visualizza, Aiuto) con le scorciatoie indicate accanto alle voci.
+- **Pannelli divisi**: affianca o impila più pannelli (Visualizza → Dividi a destra / in basso, oppure i pulsanti a destra della barra delle tab). Ogni pannello ha le sue tab. Lo stesso file aperto in due pannelli resta sincronizzato, ma cursore, scroll, blocchi chiusi e cronologia di annulla sono separati: `Ctrl+Z` annulla solo le modifiche fatte in quel pannello. Le tab si trascinano da un pannello all'altro; i divisori si trascinano per ridimensionare (doppio clic per uniformare).
+- **Tab multiple**: la sessione viene salvata in automatico in IndexedDB. Alla riapertura ritrovi pannelli, contenuto, cursore e blocchi chiusi, anche per le tab non salvate su disco.
 - **File locali**: grazie alla File System Access API, `Ctrl+S` scrive sullo stesso file su disco. C'è anche "Salva con nome".
 - **File recenti**: tiene gli handle dei file, quindi riaprendo un recente il browser chiede solo il permesso.
 - **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.
@@ -30,6 +32,8 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 | Apri | `Ctrl+O` |
 | Salva / Salva con nome | `Ctrl+S` / `Ctrl+Shift+S` |
 | Chiudi tab | `Ctrl+W` (nella PWA) / `Alt+W` |
+| Dividi a destra | `Ctrl+\` |
+| A capo automatico | `Alt+Z` |
 | Tab successiva / precedente | `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+PgGiù` / `Ctrl+PgSu` |
 | Cerca / sostituisci | `Ctrl+F` / `Ctrl+H` |
 | Vai alla riga | `Ctrl+Alt+G` |
@@ -54,15 +58,27 @@ Stack: Vite, React, TypeScript, CodeMirror 6, `vite-plugin-pwa`, `idb-keyval`.
 
 ```
 src/
-  App.tsx              UI, tab, azioni, scorciatoie, sessione
+  App.tsx              menu, azioni sui file, scorciatoie globali
+  workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
+  workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
+  components/          MenuBar, SplitView, EditorPane, StatusBar
   fs.ts                File System Access API e fallback upload/download
-  store.ts             IndexedDB: sessione, impostazioni, recenti
+  store.ts             IndexedDB: sessione (con migrazione dal formato v1), impostazioni, recenti
   editor/setup.ts      estensioni CodeMirror e compartment (tema, font, linguaggio)
   editor/folding.ts    folding per indentazione, chiusura per livello, (de)serializzazione
   editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
   editor/detect.ts     riconoscimento dal contenuto (+ detect.test.ts)
   editor/indentation.ts rilevamento e conversione tab/spazi
 ```
+
+## Versioni
+
+Il numero di versione è `MAJOR.MINOR`, appare nella barra del titolo e sta solo in `package.json` (`"version": "MAJOR.MINOR.0"`, il terzo numero resta 0):
+
+- **MAJOR** sale di 1 per ogni rilascio con nuove funzionalità (e MINOR torna a 0): `2.3` → `3.0`
+- **MINOR** sale di 1 per un rilascio con sole correzioni: `2.0` → `2.1`
+
+A ogni cambio di versione va aggiunta una voce in [CHANGELOG.md](CHANGELOG.md).
 
 ## Deploy su GitHub Pages
 
@@ -83,7 +99,6 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 - Anteprima Markdown
 - Strumenti JSON
 - Diff tra tab (`@codemirror/merge`)
-- Split view
 - Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)
 
 **Dopo**

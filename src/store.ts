@@ -1,5 +1,6 @@
 import { del, get, set } from 'idb-keyval'
 import type { Indent } from './editor/indentation'
+import type { Layout } from './workbench/layout'
 
 export type Eol = 'LF' | 'CRLF'
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -12,7 +13,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = { theme: 'system', fontSize: 14, wrap: false }
 
-export interface SavedTab {
+export interface SavedDoc {
   id: string
   name: string
   lang: string | null
@@ -22,14 +23,49 @@ export interface SavedTab {
   dirty: boolean
   eol: Eol
   content: string
-  cursor: number
-  folds: Array<[number, number]>
   handle?: FileSystemFileHandle
 }
 
+/** Un documento aperto in un pannello: cursore e blocchi chiusi sono per pannello. */
+export interface SavedPaneTab {
+  docId: string
+  cursor: number
+  folds: Array<[number, number]>
+}
+
+export interface SavedPane {
+  id: string
+  tabs: SavedPaneTab[]
+  activeDocId: string | null
+}
+
 export interface Session {
-  tabs: SavedTab[]
+  version: 2
+  docs: SavedDoc[]
+  panes: SavedPane[]
+  layout: Layout
+  activePaneId: string
+}
+
+/** Formato v1: un solo editor, tab con cursore e folding inclusi. */
+interface SessionV1 {
+  tabs: Array<SavedDoc & { cursor: number; folds: Array<[number, number]> }>
   activeId: string | null
+}
+
+function migrate(raw: Session | SessionV1 | undefined): Session | null {
+  if (!raw) return null
+  if ('version' in raw && raw.version === 2) return raw
+  const v1 = raw as SessionV1
+  if (!Array.isArray(v1.tabs)) return null
+  const paneId = 'p1'
+  return {
+    version: 2,
+    docs: v1.tabs.map(({ cursor: _c, folds: _f, ...doc }) => doc),
+    panes: [{ id: paneId, tabs: v1.tabs.map((t) => ({ docId: t.id, cursor: t.cursor, folds: t.folds })), activeDocId: v1.activeId }],
+    layout: { kind: 'pane', paneId },
+    activePaneId: paneId,
+  }
 }
 
 export interface RecentFile {
@@ -53,7 +89,7 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-export const loadSession = () => safe(async () => (await get<Session>(KEY_SESSION)) ?? null, null)
+export const loadSession = () => safe(async () => migrate(await get<Session | SessionV1>(KEY_SESSION)), null)
 export const saveSession = (s: Session) => safe(() => set(KEY_SESSION, s), undefined)
 
 export const loadSettings = () =>

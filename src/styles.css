@@ -43,7 +43,8 @@ button, select {
 button:hover, select:hover { background: var(--bg-hover); }
 select { border-color: var(--border); background: var(--bg-editor); }
 
-.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+.app { display: grid; grid-template-rows: auto 1fr auto auto; height: 100%; }
+.app:not(:has(> .console)) { grid-template-rows: auto 1fr auto; }
 .spacer { flex: 1; }
 
 /* Barra del titolo + menu */
@@ -139,6 +140,47 @@ select { border-color: var(--border); background: var(--bg-editor); }
   background: var(--bg-hover); border: 1px solid var(--border); color: var(--fg-muted);
   padding: 0 6px; border-radius: 3px; margin: 0 2px;
 }
+
+/* Barra dei pannelli Console e Anteprima */
+.panel-bar {
+  display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; min-height: 28px; flex-shrink: 0;
+  background: var(--bg-chrome); border-bottom: 1px solid var(--border); user-select: none;
+}
+.panel-bar button { padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+.panel-bar button:disabled { opacity: 0.45; cursor: default; background: transparent; }
+.panel-bar button.has-errors { color: var(--danger); }
+.panel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-muted); }
+.panel-close { font-size: 16px !important; line-height: 1; padding: 0 6px !important; }
+
+/* Anteprima */
+.preview { display: flex; flex-direction: column; flex-shrink: 0; min-width: 0; background: var(--bg-editor); }
+.preview-gutter { cursor: col-resize; }
+.preview-name { margin-left: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.preview-body { flex: 1; min-height: 0; position: relative; }
+.preview-host, .preview-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+/* la pagina in anteprima ha il suo stile: sfondo bianco come in un browser */
+.preview-frame { background: #fff; color-scheme: light; }
+.preview-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--fg-muted); background: var(--bg-editor); }
+
+/* Console */
+.console { display: flex; flex-direction: column; min-height: 0; background: var(--bg-editor); position: relative; }
+.console-gutter { flex: 0 0 5px; cursor: row-resize; }
+.console-running { margin-left: 10px; font-size: 12px; color: var(--accent); }
+.console-body { flex: 1; min-height: 0; overflow: auto; font: 12.5px/1.5 var(--font-mono); padding: 4px 0; }
+.console-empty { padding: 6px 12px; color: var(--fg-muted); font-family: var(--font-ui); }
+.console-line {
+  display: flex; gap: 12px; align-items: baseline; padding: 1px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 45%, transparent);
+}
+.console-text { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.console-line.info .console-text { color: var(--accent); }
+.console-line.warn { background: color-mix(in srgb, #d4a72c 12%, transparent); }
+.console-line.warn .console-text { color: color-mix(in srgb, #9a6700 60%, var(--fg)); }
+.console-line.error { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.console-line.error .console-text { color: var(--danger); }
+.console-line.system { color: var(--fg-muted); font-family: var(--font-ui); font-size: 12px; border-bottom: none; padding-top: 4px; }
+.console-goto { flex-shrink: 0; padding: 0 6px; font: 11px var(--font-ui); color: var(--fg-muted); text-decoration: underline; }
+.console-goto:hover { color: var(--fg); }
 
 /* Status bar */
 .statusbar {

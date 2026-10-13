@@ -34,6 +34,10 @@ import { MenuBar, type MenuDef } from './components/Menu'
 import { SplitView } from './components/SplitView'
 import { EditorPane } from './components/EditorPane'
 import { StatusBar } from './components/StatusBar'
+import { ConsolePanel } from './components/ConsolePanel'
+import { PreviewPanel } from './components/PreviewPanel'
+import { Runner } from './runner/Runner'
+import { runTarget } from './runner/transpile'
 
 const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -45,6 +49,11 @@ function toEditorSettings(s: Settings, systemDark: boolean): EditorSettings {
 export default function App() {
   const [wb] = useState(() => new Workbench(toEditorSettings(DEFAULT_SETTINGS, darkQuery.matches)))
   const snap = useSyncExternalStore(wb.subscribe, wb.getSnapshot)
+  const [runner] = useState(() => new Runner())
+  const runState = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
+  const [consoleOpen, setConsoleOpen] = useState(false)
+  const [consoleHeight, setConsoleHeight] = useState(220)
+  const [previewWidth, setPreviewWidth] = useState(() => Math.round(window.innerWidth * 0.4))
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [systemDark, setSystemDark] = useState(darkQuery.matches)
   const [recents, setRecents] = useState<RecentFile[]>([])
@@ -180,14 +189,58 @@ export default function App() {
     v.focus()
   }
 
+  // ---------- esecuzione ----------
+
+  /**
+   * JS/TS: esegue il file attivo in console, o solo la selezione se c'è.
+   * HTML/JSX/TSX: apre (o ricarica) l'anteprima del file. false se il file non è eseguibile.
+   */
+  function runActive(): boolean {
+    const doc = wb.activeDoc
+    const v = wb.activeView
+    const target = runTarget(doc?.lang)
+    if (!doc || !v || !target) return false
+    if (target === 'preview') {
+      runPreview(doc.id)
+      return true
+    }
+    const sel = v.state.selection.main
+    const code = sel.empty ? v.state.doc.toString() : v.state.sliceDoc(sel.from, sel.to)
+    const firstLine = sel.empty ? 1 : v.state.doc.lineAt(sel.from).number
+    setConsoleOpen(true)
+    void runner.run({ code, lang: doc.lang, docId: doc.id, name: doc.name, firstLine, selection: !sel.empty })
+    return true
+  }
+
+  function runPreview(docId: string) {
+    const doc = wb.doc(docId)
+    if (doc) void runner.run({ code: wb.content(docId), lang: doc.lang, docId, name: doc.name, firstLine: 1, selection: false })
+  }
+
+  function gotoDocLine(docId: string, line: number) {
+    const pane = wb.activePane.docIds.includes(docId)
+      ? wb.activePane
+      : [...wb.getSnapshot().panes.values()].find((p) => p.docIds.includes(docId))
+    if (!pane) {
+      flash('Il file eseguito non è più aperto')
+      return
+    }
+    wb.activate(pane.id, docId)
+    const v = wb.activeView
+    if (!v) return
+    const l = v.state.doc.line(Math.min(Math.max(1, line), v.state.doc.lines))
+    v.dispatch({ selection: { anchor: l.from, head: l.to }, scrollIntoView: true })
+    v.focus()
+  }
+
   const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
   const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap })
+  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive })
   useEffect(() => {
-    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap }
+    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive }
   })
 
   // ---------- inizializzazione ----------
@@ -228,6 +281,8 @@ export default function App() {
       else if (e.ctrlKey && e.key === 'PageUp') wb.cycleTab(-1)
       else if (mod && !e.altKey && e.key === '\\') void wb.split('row')
       else if (e.altKey && !mod && code === 'KeyZ') a.toggleWrap()
+      // negli altri file Ctrl+Enter resta all'editor (riga vuota sotto)
+      else if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') handled = a.runActive()
       else handled = false
       if (handled) {
         e.preventDefault()
@@ -279,6 +334,25 @@ export default function App() {
     }
   }, [])
 
+  // Anteprima dal vivo: si riesegue poco dopo ogni modifica al documento mostrato
+  useEffect(() => {
+    let timer: number | undefined
+    const off = wb.onContentChange((docId) => {
+      if (runner.getSnapshot().preview?.docId !== docId) return
+      clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        const doc = wb.doc(docId)
+        if (doc && runner.getSnapshot().preview?.docId === docId) {
+          void runner.run({ code: wb.content(docId), lang: doc.lang, docId, name: doc.name, firstLine: 1, selection: false })
+        }
+      }, 500)
+    })
+    return () => {
+      off()
+      clearTimeout(timer)
+    }
+  }, [wb, runner])
+
   // Tema di sistema
   useEffect(() => {
     const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
@@ -305,6 +379,8 @@ export default function App() {
 
   const multiPane = snap.panes.size > 1
   const anyDirty = [...snap.docs.values()].some((d) => d.dirty)
+  const activeTarget = runTarget(active?.lang)
+  const canRun = activeTarget !== null
 
   const menus: MenuDef[] = [
     {
@@ -391,6 +467,23 @@ export default function App() {
         { label: `Dimensione predefinita (${DEFAULT_SETTINGS.fontSize})`, action: () => setSetting('fontSize', DEFAULT_SETTINGS.fontSize) },
         'separator',
         { label: 'A capo automatico', shortcut: 'Alt+Z', checked: settings.wrap, action: toggleWrap },
+        'separator',
+        { label: 'Console', checked: consoleOpen, action: () => setConsoleOpen((o) => !o) },
+      ],
+    },
+    {
+      label: 'Esegui',
+      items: [
+        {
+          label: activeTarget === 'preview' ? 'Anteprima del file' : 'Esegui file o selezione',
+          shortcut: 'Ctrl+Enter',
+          disabled: !canRun,
+          action: () => void runActive(),
+        },
+        { label: 'Stop', disabled: !runState.alive, action: () => runner.stop() },
+        { label: 'Chiudi anteprima', disabled: !runState.preview, action: () => runner.closePreview() },
+        'separator',
+        { label: 'Pulisci console', disabled: !runState.entries.length, action: () => runner.clear() },
       ],
     },
     {
@@ -434,7 +527,30 @@ export default function App() {
             ) : null
           }}
         />
+        <PreviewPanel
+          runner={runner}
+          width={previewWidth}
+          consoleOpen={consoleOpen}
+          onResize={setPreviewWidth}
+          onReload={() => runState.preview && runPreview(runState.preview.docId)}
+          onToggleConsole={() => setConsoleOpen((o) => !o)}
+        />
       </main>
+
+      {consoleOpen && (
+        <ConsolePanel
+          runner={runner}
+          height={consoleHeight}
+          canRun={canRun}
+          onResize={setConsoleHeight}
+          onRun={() => void runActive()}
+          onClose={() => {
+            setConsoleOpen(false)
+            wb.activeView?.focus()
+          }}
+          onGoto={gotoDocLine}
+        />
+      )}
 
       <StatusBar
         doc={active}

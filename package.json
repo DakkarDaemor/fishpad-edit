@@ -1,7 +1,7 @@
 {
   "name": "fishpad-edit",
   "private": true,
-  "version": "2.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,7 +23,8 @@
     "codemirror": "^6.0.2",
     "idb-keyval": "^6.3.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "sucrase": "^3.35.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

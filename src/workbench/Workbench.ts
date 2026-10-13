@@ -91,6 +91,7 @@ export class Workbench {
 
   private settings: EditorSettings
   private listeners = new Set<() => void>()
+  private contentListeners = new Set<(docId: string) => void>()
   private snapshot!: Snapshot
   private persistTimer?: number
   private detectTimers = new Map<string, number>()
@@ -111,6 +112,12 @@ export class Workbench {
     return () => this.listeners.delete(fn)
   }
   getSnapshot = () => this.snapshot
+
+  /** Notifica ogni modifica al testo di un documento (una volta sola anche se è aperto in più pannelli). */
+  onContentChange(fn: (docId: string) => void) {
+    this.contentListeners.add(fn)
+    return () => void this.contentListeners.delete(fn)
+  }
 
   private emit() {
     this.snapshot = {
@@ -505,6 +512,7 @@ export class Workbench {
         }
         if (doc && (doc.langAuto || doc.indentAuto)) this.scheduleDetect(docId)
         this.schedulePersist()
+        this.contentListeners.forEach((fn) => fn(docId))
       }
     } else if (u.transactions.some((tr) => tr.effects.some((e) => e.is(foldEffect) || e.is(unfoldEffect)))) {
       this.schedulePersist()

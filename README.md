@@ -20,6 +20,8 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
   - chiusura per livello, come in VS Code
   - i blocchi chiusi vengono ricordati per ogni tab
 - **Indentazione per file**: spazi o tab e relativa larghezza vengono rilevati dal contenuto. Si possono cambiare dalla barra di stato, e c'è la conversione dell'intero file tra spazi e tab (annullabile con `Ctrl+Z`).
+- **Console JavaScript / TypeScript**: `Ctrl+Enter` esegue il file attivo, o solo la selezione, e mostra l'output in un pannello in basso, con `await` al livello principale, oggetti formattati e la riga degli errori cliccabile. Il codice gira in un Web Worker dentro un iframe `sandbox` con origine opaca: non accede a sessione e file dell'editor, e un loop infinito non blocca l'interfaccia (Stop termina tutto). TypeScript viene eseguito togliendo i tipi con sucrase, senza controllarli. Il modulo si carica solo al primo uso e conserva i numeri di riga.
+- **Anteprima HTML / React**: per i file HTML, JSX e TSX `Ctrl+Enter` apre un pannello a destra che si aggiorna mentre scrivi. Log ed errori della pagina vanno nella console. Nei file JSX/TSX si possono importare `react`, `react-dom` e `react-dom/client`: sono le build di produzione della versione usata dall'app, quindi funzionano offline. L'export default, o una funzione `App`, viene montato in automatico se il codice non chiama `createRoot`. Per ora i file locali referenziati dall'HTML (CSS, JS) e i pacchetti npm non vengono caricati.
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
 - **Tema** chiaro, scuro o di sistema; dimensione del font; a capo automatico
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), encoding UTF-8 (il BOM viene rimosso in apertura)
@@ -37,6 +39,7 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 | Tab successiva / precedente | `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+PgGiù` / `Ctrl+PgSu` |
 | Cerca / sostituisci | `Ctrl+F` / `Ctrl+H` |
 | Vai alla riga | `Ctrl+Alt+G` |
+| Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX) | `Ctrl+Enter` |
 | Seleziona occorrenza successiva | `Ctrl+D` |
 | Chiudi / apri blocco | `Ctrl+Shift+[` / `Ctrl+Shift+]` |
 | Chiudi tutto / apri tutto | `Ctrl+K Ctrl+0` / `Ctrl+K Ctrl+J` |
@@ -54,14 +57,19 @@ npm run preview
 npm test          # test unitari (vitest)
 ```
 
-Stack: Vite, React, TypeScript, CodeMirror 6, `vite-plugin-pwa`, `idb-keyval`.
+Stack: Vite, React, TypeScript, CodeMirror 6, `vite-plugin-pwa`, `idb-keyval`, `sucrase`.
 
 ```
 src/
   App.tsx              menu, azioni sui file, scorciatoie globali
   workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
   workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
-  components/          MenuBar, SplitView, EditorPane, StatusBar
+  components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel
+  runner/Runner.ts     esecuzione del codice e raccolta dell'output della console
+  runner/transpile.ts  linguaggi eseguibili (console o anteprima) e traspilazione TS/JSX (+ transpile.test.ts)
+  runner/preview.ts    documenti dell'anteprima HTML e React (+ preview.test.ts)
+  runner/react-vendor.ts React per l'anteprima, con un require minimale
+  runner/sandbox.ts    sorgenti di iframe e worker: console, formattazione dei valori, mappatura degli errori
   fs.ts                File System Access API e fallback upload/download
   store.ts             IndexedDB: sessione (con migrazione dal formato v1), impostazioni, recenti
   editor/setup.ts      estensioni CodeMirror e compartment (tema, font, linguaggio)
@@ -100,6 +108,7 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 - Strumenti JSON
 - Diff tra tab (`@codemirror/merge`)
 - Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)
+- Playground: `import` da npm (esm.sh), file locali collegati all'anteprima HTML, controllo dei tipi
 
 **Dopo**
 - Azioni AI con la propria chiave API

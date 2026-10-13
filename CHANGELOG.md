@@ -2,6 +2,15 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 3.0
+
+- Console JavaScript e TypeScript: `Ctrl+Enter` (o menu Esegui) esegue il file attivo, o solo il testo selezionato, e mostra l'output in un pannello in basso. Si ridimensiona trascinando il bordo e si apre e chiude da Visualizza → Console.
+- TypeScript viene eseguito togliendo i tipi, senza controllarli (sucrase, caricato solo al primo uso). `interface`, generici, `as` ed `enum` funzionano, e le righe degli errori restano quelle del file.
+- `await` funziona al livello principale. Oggetti, array, Map e Set vengono formattati in modo leggibile. Gli errori mostrano la riga, e un clic sulla riga la seleziona nell'editor.
+- Il codice gira isolato dall'editor (worker in un iframe sandbox): non vede la sessione né i file, e un loop infinito non blocca l'app. Stop ferma l'esecuzione, compresi timer e promise pendenti.
+- Pannello Anteprima a destra per HTML, JSX e TSX: `Ctrl+Enter` lo apre e si aggiorna da solo mentre scrivi. I `console.log` e gli errori della pagina arrivano nella console, con la riga del file.
+- React nell'anteprima, già incluso e disponibile anche offline. Si importano `react`, `react-dom` e `react-dom/client`. Il componente esportato come default (o una funzione `App`) viene montato in automatico, a meno che il codice non chiami `createRoot` da solo.
+
 ## 2.0
 
 - Pannelli divisi a destra e in basso, con tab proprie per ogni pannello. Lo stesso file in più pannelli resta sincronizzato. Le tab si trascinano tra i pannelli e i divisori si ridimensionano. Il layout viene ripristinato alla riapertura.

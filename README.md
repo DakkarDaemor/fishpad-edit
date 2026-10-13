@@ -1,0 +1,93 @@
+# Fishpad Edit
+
+Editor di testo per desktop nel browser, con syntax highlight e folding del codice. Legge e scrive i file locali direttamente, funziona offline e si installa come app (PWA).
+
+È pensato per Chromium (Chrome, Edge). Su Firefox e Safari funziona in modalità ridotta: i file si aprono con un upload e si salvano con un download.
+
+## Funzionalità (MVP)
+
+- **Tab multiple**: la sessione viene salvata in automatico in IndexedDB. Alla riapertura ritrovi contenuto, cursore e blocchi chiusi, anche per le tab non salvate su disco.
+- **File locali**: grazie alla File System Access API, `Ctrl+S` scrive sullo stesso file su disco. C'è anche "Salva con nome".
+- **File recenti**: tiene gli handle dei file, quindi riaprendo un recente il browser chiede solo il permesso.
+- **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.
+- **Drag & drop di file** sulla finestra. Su Chromium il file resta collegato a quello su disco.
+- **Syntax highlight per circa 140 linguaggi** (`@codemirror/language-data`, caricati solo quando servono). Il linguaggio si riconosce dal nome del file; per il testo incollato in una tab senza nome lo riconosce dal contenuto, con euristiche a punteggio per JavaScript, TypeScript, JSX, TSX, CSS, HTML e JSON. Mentre scrivi può passare a un linguaggio più specifico (per esempio da JS a TSX quando aggiungi i tipi), finché non lo scegli tu a mano.
+- **Folding**:
+  - dall'albero sintattico per i linguaggi con parser Lezer, comprese le sezioni Markdown sotto i titoli
+  - dall'indentazione per testo semplice e linguaggi legacy
+  - chiusura per livello, come in VS Code
+  - i blocchi chiusi vengono ricordati per ogni tab
+- **Indentazione per file**: spazi o tab e relativa larghezza vengono rilevati dal contenuto. Si possono cambiare dalla barra di stato, e c'è la conversione dell'intero file tra spazi e tab (annullabile con `Ctrl+Z`).
+- **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
+- **Tema** chiaro, scuro o di sistema; dimensione del font; a capo automatico
+- **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), encoding UTF-8 (il BOM viene rimosso in apertura)
+
+## Scorciatoie
+
+| Azione | Tasti |
+|---|---|
+| Nuova tab | `Ctrl+N` (nella PWA) / `Alt+N` |
+| Apri | `Ctrl+O` |
+| Salva / Salva con nome | `Ctrl+S` / `Ctrl+Shift+S` |
+| Chiudi tab | `Ctrl+W` (nella PWA) / `Alt+W` |
+| Tab successiva / precedente | `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+PgGiù` / `Ctrl+PgSu` |
+| Cerca / sostituisci | `Ctrl+F` / `Ctrl+H` |
+| Vai alla riga | `Ctrl+Alt+G` |
+| Seleziona occorrenza successiva | `Ctrl+D` |
+| Chiudi / apri blocco | `Ctrl+Shift+[` / `Ctrl+Shift+]` |
+| Chiudi tutto / apri tutto | `Ctrl+K Ctrl+0` / `Ctrl+K Ctrl+J` |
+| Chiudi livello N | `Ctrl+K Ctrl+1`…`5` |
+
+In una normale tab del browser, `Ctrl+N`, `Ctrl+W` e `Ctrl+Tab` restano a Chrome, per questo ci sono le alternative con `Alt`. Con la PWA installata in una finestra propria dovrebbero arrivare all'app (da verificare per ogni combinazione).
+
+## Sviluppo
+
+```bash
+npm install
+npm run dev       # http://localhost:5173
+npm run build     # output in dist/
+npm run preview
+npm test          # test unitari (vitest)
+```
+
+Stack: Vite, React, TypeScript, CodeMirror 6, `vite-plugin-pwa`, `idb-keyval`.
+
+```
+src/
+  App.tsx              UI, tab, azioni, scorciatoie, sessione
+  fs.ts                File System Access API e fallback upload/download
+  store.ts             IndexedDB: sessione, impostazioni, recenti
+  editor/setup.ts      estensioni CodeMirror e compartment (tema, font, linguaggio)
+  editor/folding.ts    folding per indentazione, chiusura per livello, (de)serializzazione
+  editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
+  editor/detect.ts     riconoscimento dal contenuto (+ detect.test.ts)
+  editor/indentation.ts rilevamento e conversione tab/spazi
+```
+
+## Deploy su GitHub Pages
+
+1. Crea il repo e fai push su `main`.
+2. In **Settings → Pages → Source** scegli **GitHub Actions**.
+3. La workflow `.github/workflows/deploy.yml` fa la build con `BASE_PATH=/<nome-repo>/` e pubblica.
+
+Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` nella workflow.
+
+## Roadmap
+
+**v1**
+- Command palette
+- Window Controls Overlay (tab nella barra del titolo)
+- Apri cartella (albero laterale semplice)
+- Avviso "file modificato da fuori" (`lastModified` al focus)
+- Prettier caricato solo quando serve
+- Anteprima Markdown
+- Strumenti JSON
+- Diff tra tab (`@codemirror/merge`)
+- Split view
+- Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)
+
+**Dopo**
+- Azioni AI con la propria chiave API
+- Modalità Vim
+- Snippet
+- Minimappa

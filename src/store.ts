@@ -1,4 +1,5 @@
 import { del, get, set } from 'idb-keyval'
+import type { Encoding } from './encoding'
 import type { Indent } from './editor/indentation'
 import type { Layout } from './workbench/layout'
 import type { TabColor } from './workbench/tabColors'
@@ -23,8 +24,11 @@ export interface SavedDoc {
   indentAuto?: boolean
   dirty: boolean
   eol: Eol
+  /** assente nelle sessioni salvate prima della 5.0: UTF-8 */
+  encoding?: Encoding
   content: string
   handle?: FileSystemFileHandle
+  mtime?: number
   color?: TabColor
 }
 
@@ -55,7 +59,7 @@ interface SessionV1 {
   activeId: string | null
 }
 
-function migrate(raw: Session | SessionV1 | undefined): Session | null {
+export function migrate(raw: Session | SessionV1 | undefined): Session | null {
   if (!raw) return null
   if ('version' in raw && raw.version === 2) return raw
   const v1 = raw as SessionV1
@@ -79,6 +83,7 @@ export interface RecentFile {
 const KEY_SESSION = 'session'
 const KEY_SETTINGS = 'settings'
 const KEY_RECENTS = 'recents'
+const KEY_FOLDER = 'previewFolder'
 const MAX_RECENTS = 12
 
 // IndexedDB può non essere disponibile (navigazione privata, storage bloccato): non deve rompere l'app.
@@ -110,6 +115,11 @@ export async function addRecent(handle: FileSystemFileHandle): Promise<RecentFil
   await safe(() => set(KEY_RECENTS, next), undefined)
   return next
 }
+
+/** Cartella da cui l'anteprima HTML carica i file locali (CSS, script, immagini). */
+export const loadFolder = () => safe(async () => (await get<FileSystemDirectoryHandle>(KEY_FOLDER)) ?? null, null)
+export const saveFolder = (dir: FileSystemDirectoryHandle | null) =>
+  safe(() => (dir ? set(KEY_FOLDER, dir) : del(KEY_FOLDER)), undefined)
 
 export async function clearRecents(): Promise<RecentFile[]> {
   await safe(() => del(KEY_RECENTS), undefined)

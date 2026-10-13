@@ -14,6 +14,8 @@ import {
 } from '../editor/indentation'
 import { detectByContent, detectByFilename } from '../editor/languages'
 import type { TabColor } from './tabColors'
+import { diffRange } from './textDiff'
+import type { Encoding } from '../encoding'
 import { saveSession, type Eol, type Session } from '../store'
 import { isValidLayout, leaf, paneIds, removePane, setSizes, splitPane, type Layout, type SplitDir } from './layout'
 
@@ -28,8 +30,20 @@ export interface Doc {
   indentAuto: boolean
   dirty: boolean
   eol: Eol
+  /** codifica usata per salvare (quella letta dal file, o scelta a mano) */
+  encoding: Encoding
   handle?: FileSystemFileHandle
+  /** `lastModified` del file su disco all'ultima lettura o scrittura: serve ad accorgersi delle modifiche esterne */
+  mtime?: number
   color?: TabColor
+}
+
+/** Contenuto letto da disco con cui sostituire quello di un documento. */
+export interface DiskContent {
+  content: string
+  eol: Eol
+  encoding: Encoding
+  mtime?: number
 }
 
 export interface Pane {
@@ -58,7 +72,9 @@ export interface NewDocInput {
   name: string
   content: string
   eol: Eol
+  encoding?: Encoding
   handle?: FileSystemFileHandle
+  mtime?: number
   lang?: string | null
   langAuto?: boolean
   indent?: Indent
@@ -242,6 +258,22 @@ export class Workbench {
     return changes.length ? `Convertite ${changes.length} righe in ${indentLabel(to)}` : 'Niente da convertire'
   }
 
+  /**
+   * Sostituisce il testo con la versione su disco in tutti i pannelli, toccando solo la parte cambiata.
+   * Il documento torna "salvato"; Ctrl+Z riporta il testo di prima.
+   */
+  replaceFromDisk(docId: string, disk: DiskContent) {
+    if (!this.docs.has(docId)) return
+    // CodeMirror tiene le righe separate da \n: il confronto va fatto sullo stesso formato
+    const changes = diffRange(this.content(docId), disk.content.replace(/\r\n?/g, '\n'))
+    if (changes) {
+      // annotato come sincronizzazione: non va replicato né deve segnare il documento come modificato
+      for (const p of this.panesWith(docId)) this.dispatchInstance(p.id, docId, { changes, annotations: syncAnnotation.of(true) })
+    }
+    this.patchDoc(docId, { dirty: false, eol: disk.eol, encoding: disk.encoding, mtime: disk.mtime })
+    if (changes) this.contentListeners.forEach((fn) => fn(docId))
+  }
+
   setColor(docId: string, color: TabColor | null) {
     this.patchDoc(docId, { color: color ?? undefined })
   }
@@ -266,7 +298,9 @@ export class Workbench {
       indentAuto: input.indentAuto ?? true,
       dirty: input.dirty ?? false,
       eol: input.eol,
+      encoding: input.encoding ?? 'utf-8',
       handle: input.handle,
+      mtime: input.mtime,
       color: input.color,
     }
     this.docs.set(id, doc)
@@ -368,18 +402,36 @@ export class Workbench {
     return true
   }
 
-  /** Divide il pannello attivo aprendo lo stesso documento nel nuovo pannello. */
-  async split(dir: SplitDir) {
-    const from = this.activePane
+  /**
+   * Divide un pannello (default: quello attivo) e apre nel nuovo pannello, accanto o sotto,
+   * una seconda vista dello stesso documento (default: la tab attiva), con cursore e scroll propri.
+   */
+  async split(dir: SplitDir, paneId = this.activePaneId, docId = this.panes.get(paneId)?.activeDocId) {
+    const from = this.panes.get(paneId)
+    if (!from) return
     const id = newId()
     this.panes.set(id, { id, docIds: [], activeDocId: null })
     this.layout = splitPane(this.layout, from.id, id, dir)
-    if (from.activeDocId) {
-      await this.cloneInstance(from.activeDocId, id, from.id)
-      this.activate(id, from.activeDocId)
+    if (docId && from.docIds.includes(docId)) {
+      await this.cloneInstance(docId, id, from.id)
+      this.activate(id, docId)
     } else {
       this.newUntitled(id)
     }
+  }
+
+  /** Apre il documento anche in un altro pannello (prima di `beforeDocId`, o in fondo), senza toglierlo da questo. */
+  async copyTab(docId: string, fromPaneId: string, toPaneId: string, beforeDocId?: string | null) {
+    const to = this.panes.get(toPaneId)
+    if (!to || !this.panes.get(fromPaneId)?.docIds.includes(docId)) return
+    if (!to.docIds.includes(docId)) {
+      await this.cloneInstance(docId, toPaneId, fromPaneId)
+      const docIds = this.panes.get(toPaneId)!.docIds.filter((id) => id !== docId)
+      const at = beforeDocId ? docIds.indexOf(beforeDocId) : -1
+      docIds.splice(at < 0 ? docIds.length : at, 0, docId)
+      this.panes.set(toPaneId, { ...this.panes.get(toPaneId)!, docIds })
+    }
+    this.activate(toPaneId, docId)
   }
 
   /** Chiude un pannello con tutte le sue tab (chiede conferma per quelle con modifiche). */

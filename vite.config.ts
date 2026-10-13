@@ -21,7 +21,8 @@ const TEXT_EXTENSIONS = [
 export default defineConfig({
   base,
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  build: { chunkSizeWarningLimit: 800 },
+  // il chunk più grande è il plugin TypeScript di Prettier (~900 kB), caricato solo alla prima formattazione
+  build: { chunkSizeWarningLimit: 1000 },
   plugins: [
     react(),
     VitePWA({

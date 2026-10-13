@@ -10,6 +10,7 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  type Command,
   type ViewUpdate,
 } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
@@ -26,18 +27,21 @@ import {
   unfoldAll,
 } from '@codemirror/language'
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search'
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { autocompletion, closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { tags as t } from '@lezer/highlight'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { foldLevel, indentationFolding, restoreFoldEffects } from './folding'
 import { loadLanguage } from './languages'
 import { DEFAULT_INDENT, indentCompartment, indentExtension, type Indent } from './indentation'
+import { webExtensions } from './web'
 
 export const languageCompartment = new Compartment()
 export const indentFoldCompartment = new Compartment()
 export const themeCompartment = new Compartment()
 export const fontCompartment = new Compartment()
 export const wrapCompartment = new Compartment()
+/** Emmet, colori CSS, controllo JSON: dipendono dal linguaggio (vedi web.ts) */
+export const webCompartment = new Compartment()
 
 export interface EditorSettings {
   dark: boolean
@@ -93,8 +97,17 @@ export function wrapExtension(wrap: boolean): Extension {
   return wrap ? EditorView.lineWrapping : []
 }
 
+/** Apre il pannello di ricerca con il cursore nel campo "Sostituisci" (openSearchPanel lo mette su "Cerca"). */
+export const openReplacePanel: Command = (view) => {
+  openSearchPanel(view)
+  const field = view.dom.querySelector<HTMLInputElement>('.cm-search input[name=replace]')
+  field?.focus()
+  field?.select()
+  return true
+}
+
 const extraKeymap = keymap.of([
-  { key: 'Mod-h', run: openSearchPanel, preventDefault: true },
+  { key: 'Mod-h', run: openReplacePanel, preventDefault: true },
   // Stile VS Code: Ctrl+K poi Ctrl+0 / Ctrl+J / Ctrl+1..5
   { key: 'Mod-k Mod-0', run: foldAll },
   { key: 'Mod-k Mod-j', run: unfoldAll },
@@ -143,11 +156,15 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     bracketMatching(),
     closeBrackets(),
+    // suggerimenti dei linguaggi caricati (tag HTML, proprietà CSS, parole chiave e snippet JS/TS…): Invio accetta
+    autocompletion(),
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),
     highlightSelectionMatches(),
     search({ top: true }),
+    // prima dei keymap dell'editor: il Tab di Emmet deve vincere su indentWithTab
+    webCompartment.of([]),
     extraKeymap,
     keymap.of([
       ...closeBracketsKeymap,
@@ -194,8 +211,9 @@ export function settingsEffects(settings: EditorSettings) {
 
 /** Effetti per impostare il linguaggio (null = testo semplice). */
 export async function languageEffects(name: string | null) {
-  const loaded = name ? await loadLanguage(name) : null
+  const [loaded, web] = await Promise.all([name ? loadLanguage(name) : null, webExtensions(name)])
   return [
+    webCompartment.reconfigure(web),
     languageCompartment.reconfigure(loaded ? loaded.support : []),
     // Con parser Lezer il folding viene dall'albero sintattico; altrimenti dall'indentazione.
     indentFoldCompartment.reconfigure(!loaded || loaded.legacy ? indentationFolding : []),

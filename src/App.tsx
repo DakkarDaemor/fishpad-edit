@@ -3,14 +3,18 @@ import type { EditorView } from '@codemirror/view'
 import { redo, selectAll, toggleComment, undo } from '@codemirror/commands'
 import { foldAll, unfoldAll } from '@codemirror/language'
 import { gotoLine, openSearchPanel } from '@codemirror/search'
-import type { EditorSettings } from './editor/setup'
+import { openReplacePanel, type EditorSettings } from './editor/setup'
 import { foldLevel } from './editor/folding'
 import { detectByFilename, extensionFor } from './editor/languages'
+import { canFormat, formatCode } from './editor/format'
 import {
+  diskMtime,
   ensurePermission,
   filesFromDrop,
+  hasFolderAccess,
   hasFsAccess,
   pickFiles,
+  pickFolder,
   readHandle,
   saveAs,
   serialize,
@@ -21,15 +25,19 @@ import {
   DEFAULT_SETTINGS,
   addRecent,
   clearRecents,
+  loadFolder,
   loadRecents,
   loadSession,
   loadSettings,
+  saveFolder,
   saveSettings,
   type RecentFile,
   type Settings,
   type ThemeMode,
 } from './store'
-import { Workbench } from './workbench/Workbench'
+import { encode, type Encoding } from './encoding'
+import { Workbench, type Doc } from './workbench/Workbench'
+import { diffRange } from './workbench/textDiff'
 import { MenuBar, type MenuDef } from './components/Menu'
 import { SplitView } from './components/SplitView'
 import { EditorPane } from './components/EditorPane'
@@ -37,8 +45,12 @@ import { StatusBar } from './components/StatusBar'
 import { ConsolePanel } from './components/ConsolePanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { tabColorItems } from './components/tabColorMenu'
+import { CommandPalette } from './components/CommandPalette'
+import { menuCommands, type PaletteItem } from './components/commands'
+import { HelpDialog, type HelpView } from './components/HelpDialog'
 import { Runner } from './runner/Runner'
 import { runTarget } from './runner/transpile'
+import { folderAssets } from './runner/folderAssets'
 
 const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -60,7 +72,14 @@ export default function App() {
   const [recents, setRecents] = useState<RecentFile[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [palette, setPalette] = useState<'commands' | 'tabs' | null>(null)
+  const [help, setHelp] = useState<HelpView | null>(null)
+  /** Cartella da cui l'anteprima HTML carica CSS, script e immagini referenziati dalla pagina */
+  const [previewFolder, setPreviewFolder] = useState<FileSystemDirectoryHandle | null>(null)
   const toastTimer = useRef<number | undefined>(undefined)
+  /** Per documento: ultima versione su disco per cui l'utente ha scelto di tenere le sue modifiche. */
+  const keptOverDisk = useRef(new Map<string, number>())
+  const checkingDisk = useRef(false)
 
   function flash(msg: string | null) {
     if (!msg) return
@@ -71,6 +90,17 @@ export default function App() {
 
   // ---------- file ----------
 
+  /** Pannello che mostra il documento: quello attivo se lo contiene, altrimenti il primo che lo ha. */
+  const paneWith = (docId: string) =>
+    wb.activePane.docIds.includes(docId) ? wb.activePane : [...wb.getSnapshot().panes.values()].find((p) => p.docIds.includes(docId))
+
+  /** Porta in primo piano il documento nel suo pannello. false se non è più aperto. */
+  function showDoc(docId: string) {
+    const pane = paneWith(docId)
+    if (pane) wb.activate(pane.id, docId)
+    return !!pane
+  }
+
   async function openFiles(files: OpenedFile[]) {
     if (!files.length) return
     // una sola tab vuota e intatta nel pannello attivo viene sostituita dal primo file aperto
@@ -80,13 +110,7 @@ export default function App() {
       if (f.handle) {
         const existing = await wb.findByHandle(f.handle)
         if (existing) {
-          const where = wb.activePane.docIds.includes(existing.id) ? wb.activePane.id : null
-          if (where) wb.activate(where, existing.id)
-          else {
-            // aperto in un altro pannello: lo si porta in primo piano lì
-            const other = [...wb.getSnapshot().panes.values()].find((p) => p.docIds.includes(existing.id))!
-            wb.activate(other.id, existing.id)
-          }
+          showDoc(existing.id)
           continue
         }
         setRecents(await addRecent(f.handle))
@@ -113,22 +137,47 @@ export default function App() {
     }
   }
 
+  /** Testo del documento nella sua codifica; null se l'utente annulla perché la codifica non basta. */
+  function encodeDoc(doc: Doc): Uint8Array<ArrayBuffer> | null {
+    const text = serialize(wb.content(doc.id), doc.eol)
+    const { bytes, unmappable } = encode(text, doc.encoding)
+    if (!unmappable) return bytes
+    const what = unmappable === 1 ? 'un carattere' : `${unmappable} caratteri`
+    if (!confirm(`"${doc.name}" contiene ${what} che la codifica Windows-1252 non può rappresentare.\n\nSalvarlo in UTF-8?`)) {
+      return null
+    }
+    wb.patchDoc(doc.id, { encoding: 'utf-8' })
+    return encode(text, 'utf-8').bytes
+  }
+
   async function save(docId = wb.activeDoc?.id, forceSaveAs = false) {
     const doc = wb.doc(docId)
     if (!doc) return
-    const data = serialize(wb.content(doc.id), doc.eol)
     try {
       if (doc.handle && !forceSaveAs) {
-        await writeHandle(doc.handle, data)
-        wb.patchDoc(doc.id, { dirty: false })
+        if (!(await ensurePermission(doc.handle, 'readwrite'))) throw new Error('Permesso di scrittura negato')
+        const onDisk = await diskMtime(doc.handle)
+        const changedOutside = doc.mtime != null && onDisk != null && onDisk !== doc.mtime
+        const overwrite = `"${doc.name}" è stato modificato su disco da un altro programma.\n\nSovrascriverlo con la versione dell'editor?`
+        if (changedOutside && !confirm(overwrite)) {
+          flash('Salvataggio annullato. File → Ricarica dal disco mostra la versione su disco')
+          return
+        }
+        const data = encodeDoc(doc)
+        if (!data) return
+        const mtime = await writeHandle(doc.handle, data)
+        wb.patchDoc(doc.id, { dirty: false, mtime })
+        keptOverDisk.current.delete(doc.id)
         flash(`Salvato: ${doc.name}`)
         return
       }
+      const data = encodeDoc(doc)
+      if (!data) return
       const suggested = doc.name.includes('.') ? doc.name : `${doc.name}${extensionFor(doc.lang)}`
       const handle = await saveAs(suggested, data)
       if (handle === null) return // annullato
       if (handle) {
-        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false })
+        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false, mtime: (await diskMtime(handle)) ?? undefined })
         setRecents(await addRecent(handle))
         const byName = detectByFilename(handle.name)
         if (byName && byName !== doc.lang) void wb.setLanguage(doc.id, byName, false)
@@ -140,6 +189,53 @@ export default function App() {
       }
     } catch (err) {
       flash(`Errore salvataggio: ${(err as Error).message}`)
+    }
+  }
+
+  /** Rilegge il file da disco (con `encoding`, o rilevando la codifica), dopo conferma se ci sono modifiche. */
+  async function reload(docId = wb.activeDoc?.id, encoding?: Encoding) {
+    const doc = wb.doc(docId)
+    if (!doc?.handle) return
+    if (doc.dirty && !confirm(`Scartare le modifiche a "${doc.name}" e ricaricarlo dal disco?`)) return
+    try {
+      if (!(await ensurePermission(doc.handle, 'read'))) return
+      wb.replaceFromDisk(doc.id, await readHandle(doc.handle, encoding))
+      keptOverDisk.current.delete(doc.id)
+      flash(`Ricaricato: ${doc.name}`)
+    } catch {
+      flash(`Impossibile ricaricare "${doc.name}" (spostato o eliminato?)`)
+    }
+  }
+
+  /**
+   * Cerca i file cambiati su disco da un altro programma: quelli senza modifiche si ricaricano da soli,
+   * per gli altri si chiede (una volta per ogni versione su disco). Solo per i file con permesso già concesso.
+   */
+  async function checkDisk() {
+    if (checkingDisk.current) return
+    checkingDisk.current = true
+    try {
+      for (const { id } of wb.allDocs) {
+        const handle = wb.doc(id)?.handle
+        if (!handle || wb.doc(id)?.mtime == null) continue
+        if ((await handle.queryPermission({ mode: 'read' }).catch(() => 'denied')) !== 'granted') continue
+        const onDisk = await diskMtime(handle).catch(() => null)
+        // rilette dopo gli await: nel frattempo il documento può essere stato salvato o chiuso
+        const doc = wb.doc(id)
+        if (!doc?.handle || onDisk == null || onDisk === doc.mtime || onDisk === keptOverDisk.current.get(id)) continue
+        if (doc.dirty) {
+          keptOverDisk.current.set(id, onDisk)
+          const msg = `"${doc.name}" è stato modificato da un altro programma, e qui ha modifiche non salvate.\n\nRicaricarlo dal disco perdendo le modifiche?`
+          if (!confirm(msg)) continue
+        }
+        wb.replaceFromDisk(id, await readHandle(doc.handle))
+        keptOverDisk.current.delete(id)
+        flash(`Ricaricato dal disco: ${doc.name}`)
+      }
+    } catch (err) {
+      console.warn('[checkDisk]', err)
+    } finally {
+      checkingDisk.current = false
     }
   }
 
@@ -158,7 +254,8 @@ export default function App() {
     const v = wb.activeView
     if (!v) return
     cmd(v)
-    v.focus()
+    // i comandi che aprono un pannello (cerca, vai alla riga) hanno già spostato il focus lì
+    if (!v.dom.contains(document.activeElement)) v.focus()
   }
 
   const selectionText = (v: EditorView) =>
@@ -190,6 +287,34 @@ export default function App() {
     v.focus()
   }
 
+  /** Formatta il documento attivo con Prettier; si annulla con Ctrl+Z come una modifica normale. */
+  async function formatActive() {
+    const doc = wb.activeDoc
+    const v = wb.activeView
+    if (!doc || !v) return
+    if (!doc.lang || !canFormat(doc.lang)) {
+      flash(`Formattazione non disponibile per ${doc.lang ?? 'testo semplice'}`)
+      return
+    }
+    const code = v.state.doc.toString()
+    try {
+      const { formatted, cursorOffset } = await formatCode(code, doc.lang, v.state.selection.main.head, doc.indent)
+      // nel frattempo (primo caricamento di Prettier) il testo potrebbe essere cambiato
+      if (v.state.doc.toString() !== code) return
+      const changes = diffRange(code, formatted)
+      if (!changes) {
+        flash('Il documento è già formattato')
+        return
+      }
+      const cursor = Math.min(Math.max(cursorOffset, 0), formatted.length)
+      v.dispatch({ changes, selection: { anchor: cursor }, scrollIntoView: true, userEvent: 'input.format' })
+    } catch (err) {
+      // gli errori di sintassi di Prettier riportano anche il codice: basta la prima riga
+      flash(`Formattazione non riuscita: ${(err as Error).message.split('\n')[0]}`)
+    }
+    v.focus()
+  }
+
   // ---------- esecuzione ----------
 
   /**
@@ -202,7 +327,7 @@ export default function App() {
     const target = runTarget(doc?.lang)
     if (!doc || !v || !target) return false
     if (target === 'preview') {
-      runPreview(doc.id)
+      void runPreview(doc.id)
       return true
     }
     const sel = v.state.selection.main
@@ -213,20 +338,54 @@ export default function App() {
     return true
   }
 
-  function runPreview(docId: string) {
+  /**
+   * Esegue l'anteprima del documento, con i file locali della cartella dell'anteprima se la pagina sta lì dentro.
+   * `ask`: si può chiedere il permesso di lettura (solo su azione dell'utente, non negli aggiornamenti dal vivo).
+   */
+  async function runPreview(docId: string, ask = true) {
     const doc = wb.doc(docId)
-    if (doc) void runner.run({ code: wb.content(docId), lang: doc.lang, docId, name: doc.name, firstLine: 1, selection: false })
+    if (!doc) return
+    let assets = null
+    const folder = previewFolder
+    if (folder && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
+      const granted = ask
+        ? await ensurePermission(folder, 'read').catch(() => false)
+        : (await folder.queryPermission({ mode: 'read' }).catch(() => 'denied')) === 'granted'
+      if (granted) {
+        assets = await folderAssets(folder, doc.handle, async (h) => {
+          const open = await wb.findByHandle(h)
+          return open ? wb.content(open.id) : undefined
+        })
+      }
+    }
+    // il documento potrebbe essere stato chiuso durante gli await
+    const current = wb.doc(docId)
+    if (!current) return
+    void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
+  }
+
+  async function choosePreviewFolder() {
+    try {
+      const dir = await pickFolder()
+      if (!dir) return
+      setPreviewFolder(dir)
+      void saveFolder(dir)
+      flash(`Cartella dell'anteprima: ${dir.name}`)
+    } catch (err) {
+      flash(`Errore: ${(err as Error).message}`)
+    }
+  }
+
+  function forgetPreviewFolder() {
+    setPreviewFolder(null)
+    void saveFolder(null)
   }
 
   function gotoDocLine(docId: string, line: number) {
-    const pane = wb.activePane.docIds.includes(docId)
-      ? wb.activePane
-      : [...wb.getSnapshot().panes.values()].find((p) => p.docIds.includes(docId))
-    if (!pane) {
+    if (!showDoc(docId)) {
       flash('Il file eseguito non è più aperto')
       return
     }
-    wb.activate(pane.id, docId)
     const v = wb.activeView
     if (!v) return
     const l = v.state.doc.line(Math.min(Math.max(1, line), v.state.doc.lines))
@@ -239,9 +398,9 @@ export default function App() {
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive })
+  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive, checkDisk, formatActive, runPreview })
   useEffect(() => {
-    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive }
+    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive, checkDisk, formatActive, runPreview }
   })
 
   // ---------- inizializzazione ----------
@@ -249,16 +408,23 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [session, savedSettings, savedRecents] = await Promise.all([loadSession(), loadSettings(), loadRecents()])
+      const [session, savedSettings, savedRecents, savedFolder] = await Promise.all([
+        loadSession(),
+        loadSettings(),
+        loadRecents(),
+        loadFolder(),
+      ])
       if (cancelled) return
       setSettings(savedSettings)
       setRecents(savedRecents)
+      setPreviewFolder(savedFolder)
       wb.setEditorSettings(toEditorSettings(savedSettings, darkQuery.matches))
       if (!session || !wb.restore(session)) wb.newUntitled()
+      void actions.current.checkDisk()
       // File aperti dal sistema operativo ("Apri con…") nella PWA installata
       window.launchQueue?.setConsumer(async (params) => {
         const handles = params.files.filter((h): h is FileSystemFileHandle => h.kind === 'file')
-        if (handles.length) await actions.current.openFiles(await Promise.all(handles.map(readHandle)))
+        if (handles.length) await actions.current.openFiles(await Promise.all(handles.map((h) => readHandle(h))))
       })
     })()
     return () => {
@@ -282,6 +448,9 @@ export default function App() {
       else if (e.ctrlKey && e.key === 'PageUp') wb.cycleTab(-1)
       else if (mod && !e.altKey && e.key === '\\') void wb.split('row')
       else if (e.altKey && !mod && code === 'KeyZ') a.toggleWrap()
+      else if ((mod && e.shiftKey && !e.altKey && code === 'KeyP') || e.key === 'F1') setPalette('commands')
+      else if (mod && !e.shiftKey && !e.altKey && code === 'KeyP') setPalette('tabs')
+      else if (e.altKey && e.shiftKey && !mod && code === 'KeyF') void a.formatActive()
       // negli altri file Ctrl+Enter resta all'editor (riga vuota sotto)
       else if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') handled = a.runActive()
       else handled = false
@@ -290,15 +459,22 @@ export default function App() {
         e.stopPropagation()
       }
     }
-    const flush = () => document.visibilityState === 'hidden' && void wb.persistNow()
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') void wb.persistNow()
+      else void actions.current.checkDisk()
+    }
     const onPageHide = () => void wb.persistNow()
+    // tornando all'app dopo aver usato un altro programma
+    const onFocus = () => void actions.current.checkDisk()
     window.addEventListener('keydown', onKey, true)
-    document.addEventListener('visibilitychange', flush)
+    document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('focus', onFocus)
     return () => {
       window.removeEventListener('keydown', onKey, true)
-      document.removeEventListener('visibilitychange', flush)
+      document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('focus', onFocus)
     }
   }, [wb])
 
@@ -339,20 +515,20 @@ export default function App() {
   useEffect(() => {
     let timer: number | undefined
     const off = wb.onContentChange((docId) => {
-      if (runner.getSnapshot().preview?.docId !== docId) return
+      const shown = runner.getSnapshot().preview?.docId
+      // anche le modifiche ai file su disco (CSS, script…) che la pagina può caricare dalla cartella dell'anteprima
+      if (!shown || (shown !== docId && !(previewFolder && wb.doc(docId)?.handle))) return
       clearTimeout(timer)
       timer = window.setTimeout(() => {
-        const doc = wb.doc(docId)
-        if (doc && runner.getSnapshot().preview?.docId === docId) {
-          void runner.run({ code: wb.content(docId), lang: doc.lang, docId, name: doc.name, firstLine: 1, selection: false })
-        }
+        const id = runner.getSnapshot().preview?.docId
+        if (id && wb.doc(id)) void actions.current.runPreview(id, false)
       }, 500)
     })
     return () => {
       off()
       clearTimeout(timer)
     }
-  }, [wb, runner])
+  }, [wb, runner, previewFolder])
 
   // Tema di sistema
   useEffect(() => {
@@ -413,6 +589,7 @@ export default function App() {
         { label: 'Salva', shortcut: 'Ctrl+S', disabled: !active, action: () => void save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Shift+S', disabled: !active, action: () => void save(undefined, true) },
         { label: 'Salva tutto', disabled: !anyDirty, action: () => void saveAll() },
+        { label: 'Ricarica dal disco', disabled: !active?.handle, action: () => void reload() },
         'separator',
         { label: 'Chiudi tab', shortcut: 'Alt+W', action: closeActiveTab },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
@@ -430,15 +607,19 @@ export default function App() {
         { label: 'Seleziona tutto', shortcut: 'Ctrl+A', action: () => run(selectAll) },
         'separator',
         { label: 'Cerca…', shortcut: 'Ctrl+F', action: () => run(openSearchPanel) },
-        { label: 'Sostituisci…', shortcut: 'Ctrl+H', action: () => run(openSearchPanel) },
+        { label: 'Sostituisci…', shortcut: 'Ctrl+H', action: () => run(openReplacePanel) },
         { label: 'Vai alla riga…', shortcut: 'Ctrl+Alt+G', action: () => run(gotoLine) },
         'separator',
         { label: 'Commenta / decommenta', shortcut: 'Ctrl+/', action: () => run(toggleComment) },
+        { label: 'Formatta documento', shortcut: 'Shift+Alt+F', disabled: !canFormat(active?.lang), action: () => void formatActive() },
       ],
     },
     {
       label: 'Visualizza',
       items: [
+        { label: 'Palette dei comandi…', shortcut: 'Ctrl+Shift+P', action: () => setPalette('commands') },
+        { label: 'Vai a una tab…', shortcut: 'Ctrl+P', action: () => setPalette('tabs') },
+        'separator',
         { label: 'Dividi a destra', shortcut: 'Ctrl+\\', action: () => void wb.split('row') },
         { label: 'Dividi in basso', action: () => void wb.split('column') },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
@@ -488,6 +669,16 @@ export default function App() {
         },
         { label: 'Stop', disabled: !runState.alive, action: () => runner.stop() },
         { label: 'Chiudi anteprima', disabled: !runState.preview, action: () => runner.closePreview() },
+        ...(hasFolderAccess
+          ? [
+              'separator' as const,
+              {
+                label: previewFolder ? `Cartella dell'anteprima: ${previewFolder.name}…` : "Cartella dell'anteprima…",
+                action: () => void choosePreviewFolder(),
+              },
+              { label: 'Scollega la cartella', disabled: !previewFolder, action: forgetPreviewFolder },
+            ]
+          : []),
         'separator',
         { label: 'Pulisci console', disabled: !runState.entries.length, action: () => runner.clear() },
       ],
@@ -496,11 +687,36 @@ export default function App() {
       label: 'Aiuto',
       items: [
         { heading: `Fishpad Edit v${__APP_VERSION__}` },
-        { label: 'Novità delle versioni', action: () => window.open(`${REPO_URL}/blob/main/CHANGELOG.md`, '_blank', 'noopener') },
-        { label: 'Scorciatoie da tastiera', action: () => window.open(`${REPO_URL}#scorciatoie`, '_blank', 'noopener') },
+        { label: 'Scorciatoie da tastiera', action: () => setHelp('shortcuts') },
+        { label: 'Novità delle versioni', action: () => setHelp('changelog') },
+        'separator',
+        { label: 'Codice sorgente su GitHub', action: () => window.open(REPO_URL, '_blank', 'noopener') },
       ],
     },
   ]
+
+  /** Ctrl+P: le tab aperte, la attiva per ultima (per passare subito a un'altra). */
+  const tabItems = (): PaletteItem[] => {
+    const multi = snap.panes.size > 1
+    const panes = [...snap.panes.values()]
+    return [...snap.docs.values()]
+      .sort((a, b) => Number(a.id === active?.id) - Number(b.id === active?.id))
+      .map((d) => {
+        const n = panes.findIndex((p) => p.docIds.includes(d.id))
+        return {
+          id: d.id,
+          label: `${d.dirty ? '● ' : ''}${d.name}`,
+          detail: [d.handle ? '' : 'non salvato', multi && n >= 0 ? `pannello ${n + 1}` : ''].filter(Boolean).join(' · '),
+          run: () => showDoc(d.id),
+        }
+      })
+  }
+
+  const closeOverlay = () => {
+    setPalette(null)
+    setHelp(null)
+    wb.activeView?.focus()
+  }
 
   return (
     <div className={`app${dragging ? ' dragging' : ''}`}>
@@ -570,7 +786,21 @@ export default function App() {
         onRedetectIndent={() => flash(wb.redetectIndent())}
         onConvertIndent={(to) => flash(wb.convertIndent(to))}
         onToggleEol={() => wb.toggleEol()}
+        onEncoding={(encoding) => {
+          if (active && encoding !== active.encoding) wb.patchDoc(active.id, { encoding, dirty: true })
+        }}
+        onReopen={(encoding) => void reload(active?.id, encoding)}
       />
+
+      {palette && (
+        <CommandPalette
+          key={palette}
+          items={palette === 'commands' ? menuCommands(menus) : tabItems()}
+          placeholder={palette === 'commands' ? 'Cerca un comando…' : 'Vai a una tab aperta…'}
+          onClose={closeOverlay}
+        />
+      )}
+      {help && <HelpDialog view={help} onView={setHelp} onClose={closeOverlay} />}
 
       {toast && <div className="toast" role="status">{toast}</div>}
       {dragging && <div className="drop-overlay">Rilascia per aprire</div>}

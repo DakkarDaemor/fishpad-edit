@@ -2,6 +2,23 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 5.0
+
+- File modificati da un altro programma: `Ctrl+S` chiede conferma prima di sovrascrivere un file cambiato su disco dopo l'ultima lettura. Tornando all'app, i file aperti che sono cambiati si ricaricano da soli se non hanno modifiche, altrimenti l'app chiede cosa fare.
+- File → Ricarica dal disco: rilegge il file, tocca solo le righe cambiate e si annulla con `Ctrl+Z`.
+- Codifica Windows-1252: i file che non sono UTF-8 valido (tipici dei vecchi programmi Windows) si aprono con le lettere accentate corrette e si salvano nella stessa codifica. Dalla barra di stato si sceglie con quale codifica salvare o si riapre il file con un'altra. Se il testo contiene caratteri che Windows-1252 non può rappresentare, l'app propone di salvare in UTF-8.
+- Palette dei comandi: `Ctrl+Shift+P` (o `F1`) cerca tra tutte le voci dei menu, `Ctrl+P` passa a una tab aperta. La ricerca è approssimata, come in VS Code.
+- Aiuto → Scorciatoie da tastiera e Aiuto → Novità delle versioni si aprono in una finestra dentro l'app, anche offline.
+- Formatta documento (`Shift+Alt+F`) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS, HTML, Vue, Markdown e YAML. Prettier si scarica solo al primo uso.
+- Suggerimenti mentre scrivi (tag HTML, proprietà CSS, parole chiave e snippet JS/TS), richiamabili con `Ctrl+Spazio`.
+- Emmet in HTML, JSX/TSX e nei fogli di stile: `Tab` espande l'abbreviazione, `Ctrl+E` la forza.
+- Colori CSS: un quadratino accanto a ogni colore apre il selettore del sistema e riscrive il valore nello stesso formato.
+- I file JSON mostrano gli errori di sintassi mentre scrivi.
+- Anteprima Markdown: `Ctrl+Enter` su un file Markdown lo mostra formattato a destra, aggiornato mentre scrivi.
+- File locali nell'anteprima HTML: con Esegui → Cartella dell'anteprima la pagina carica CSS, script, immagini e font dalla cartella del sito. I file aperti nell'editor vengono usati con le modifiche non salvate.
+- Trascinando una tab in un altro pannello con `Ctrl` premuto, il file si apre anche lì invece di spostarsi. Dal menu col tasto destro su una tab si apre il file in un nuovo pannello a destra o in basso.
+- Modifica → Sostituisci (e `Ctrl+H`) mette il cursore nel campo "Sostituisci" invece che in "Cerca". Cerca e Vai alla riga dal menu non perdono più il focus a favore dell'editor.
+
 ## 4.0
 
 - Tab colorate: tasto destro su una tab (o Visualizza → Colore tab) per scegliere un colore pastello. La tab aperta sfuma nello sfondo dell'editor e, nel pannello attivo, ha un bordo alto nel suo colore. Il colore è del file, quindi se è aperto in più pannelli tutte le sue tab cambiano insieme, e viene ripristinato alla riapertura.

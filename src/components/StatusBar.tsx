@@ -1,4 +1,5 @@
 import { indentLabel, type Indent } from '../editor/indentation'
+import { ENCODING_LABELS, type Encoding } from '../encoding'
 import { languageNames } from '../editor/languages'
 import { hasFsAccess } from '../fs'
 import type { CursorStatus, Doc } from '../workbench/Workbench'
@@ -12,9 +13,16 @@ interface Props {
   onRedetectIndent: () => void
   onConvertIndent: (to: Indent) => void
   onToggleEol: () => void
+  /** codifica con cui salvare il file */
+  onEncoding: (encoding: Encoding) => void
+  /** rilegge il file da disco con la codifica indicata */
+  onReopen: (encoding: Encoding) => void
 }
 
-export function StatusBar({ doc, status, onLanguage, onIndent, onRedetectIndent, onConvertIndent, onToggleEol }: Props) {
+const ENCODINGS = Object.keys(ENCODING_LABELS) as Encoding[]
+
+export function StatusBar(props: Props) {
+  const { doc, status, onLanguage, onIndent, onRedetectIndent, onConvertIndent, onToggleEol, onEncoding, onReopen } = props
   const indentItems = (d: Doc): MenuItem[] => [
     { heading: 'Usa per questo file' },
     ...[false, true].flatMap((tabs) =>
@@ -29,6 +37,18 @@ export function StatusBar({ doc, status, onLanguage, onIndent, onRedetectIndent,
     { heading: 'Converti il file in' },
     { label: `Tab (larghezza ${d.indent.size})`, action: () => onConvertIndent({ tabs: true, size: d.indent.size }) },
     ...[2, 4].map((size) => ({ label: `Spazi: ${size}`, action: () => onConvertIndent({ tabs: false, size }) })),
+  ]
+
+  const encodingItems = (d: Doc): MenuItem[] => [
+    { heading: 'Salva con codifica' },
+    ...ENCODINGS.map((e) => ({ label: ENCODING_LABELS[e], checked: d.encoding === e, action: () => onEncoding(e) })),
+    ...(d.handle
+      ? [
+          'separator' as const,
+          { heading: 'Riapri con codifica' },
+          ...ENCODINGS.map((e) => ({ label: ENCODING_LABELS[e], action: () => onReopen(e) })),
+        ]
+      : []),
   ]
 
   return (
@@ -55,7 +75,7 @@ export function StatusBar({ doc, status, onLanguage, onIndent, onRedetectIndent,
             items={indentItems(doc)}
           />
           <button onClick={onToggleEol} title="Fine riga (clic per cambiare)">{doc.eol}</button>
-          <span>UTF-8</span>
+          <MenuButton up label={ENCODING_LABELS[doc.encoding]} title="Codifica del file" items={encodingItems(doc)} />
         </>
       )}
     </footer>

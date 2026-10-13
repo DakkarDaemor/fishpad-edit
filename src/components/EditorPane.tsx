@@ -20,6 +20,7 @@ interface DraggedTab {
 }
 
 const isTabDrag = (e: DragEvent) => e.dataTransfer.types.includes(TAB_MIME)
+const copyDrag = (e: DragEvent) => e.ctrlKey || e.metaKey
 
 /** Un pannello: barra delle tab + EditorView di CodeMirror (gestita dal Workbench). */
 export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
@@ -39,13 +40,15 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
     e.stopPropagation()
     setDropTarget(false)
     const { docId, fromPaneId } = JSON.parse(e.dataTransfer.getData(TAB_MIME)) as DraggedTab
-    void wb.moveTab(docId, fromPaneId, pane.id, beforeDocId)
+    // con Ctrl la tab resta anche nel pannello di partenza: due viste dello stesso file
+    if (copyDrag(e) && fromPaneId !== pane.id) void wb.copyTab(docId, fromPaneId, pane.id, beforeDocId)
+    else void wb.moveTab(docId, fromPaneId, pane.id, beforeDocId)
   }
   const onDragOver = (e: DragEvent) => {
     if (!isTabDrag(e)) return
     e.preventDefault()
     e.stopPropagation() // altrimenti CodeMirror mostra il cursore di inserimento testo
-    e.dataTransfer.dropEffect = 'move'
+    e.dataTransfer.dropEffect = copyDrag(e) ? 'copy' : 'move'
     setDropTarget(true)
   }
 
@@ -67,11 +70,11 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
               data-doc-id={id}
               className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
               style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
-              title={d.handle ? d.name : `${d.name} (non salvato su disco)`}
+              title={`${d.handle ? d.name : `${d.name} (non salvato su disco)`}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
-                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.effectAllowed = 'copyMove'
               }}
               onClick={() => wb.activate(pane.id, id)}
               onAuxClick={(e) => e.button === 1 && wb.closeTab(pane.id, id)}
@@ -98,13 +101,21 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
         <button className="tab-new" onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
         <div className="spacer" />
         <div className="pane-actions">
-          <button onClick={() => void wb.split('row')} title="Dividi a destra (Ctrl+\)" aria-label="Dividi a destra">
+          <button
+            onClick={() => void wb.split('row', pane.id)}
+            title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
+            aria-label="Dividi a destra"
+          >
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
               <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" />
             </svg>
           </button>
-          <button onClick={() => void wb.split('column')} title="Dividi in basso" aria-label="Dividi in basso">
+          <button
+            onClick={() => void wb.split('column', pane.id)}
+            title="Dividi in basso: apre lo stesso file in un nuovo pannello sotto, con scroll e cursore propri"
+            aria-label="Dividi in basso"
+          >
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
               <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
               <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
@@ -124,6 +135,9 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
           y={tabMenu.y}
           onClose={closeTabMenu}
           items={[
+            { label: 'Apri a destra', action: () => void wb.split('row', pane.id, menuDoc.id) },
+            { label: 'Apri in basso', action: () => void wb.split('column', pane.id, menuDoc.id) },
+            'separator',
             { heading: 'Colore' },
             ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),
             'separator',

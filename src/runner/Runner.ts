@@ -1,6 +1,8 @@
-import { htmlDocument, reactDocument } from './preview'
+import { htmlDocument, markdownDocument, reactDocument } from './preview'
 import { IFRAME_HTML, SANDBOX_TAG, buildWorkerSource, type LogLevel, type SandboxMessage } from './sandbox'
 import { CompileError, runTarget, toJavaScript, type RunTarget } from './transpile'
+import { rewriteHtml } from './assets'
+import type { PreviewAssets } from './folderAssets'
 
 export interface ConsoleEntry {
   id: number
@@ -35,6 +37,8 @@ export interface RunRequest {
   /** Riga del documento da cui parte `code` (1 = inizio file; > 1 quando si esegue una selezione) */
   firstLine: number
   selection: boolean
+  /** Anteprima HTML/Markdown: file locali della cartella da caricare nella pagina */
+  assets?: PreviewAssets | null
 }
 
 const MAX_ENTRIES = 2000
@@ -42,7 +46,7 @@ const MAX_ENTRIES = 2000
 /**
  * Esegue il codice nella sandbox e raccoglie l'output della console:
  * - console (JS/TS): worker in un iframe nascosto (vedi sandbox.ts);
- * - anteprima (HTML/JSX/TSX): iframe visibile, montato nel contenitore dato da setPreviewHost.
+ * - anteprima (HTML/JSX/TSX/Markdown): iframe visibile, montato nel contenitore dato da setPreviewHost.
  * Una sola sandbox alla volta; ogni esecuzione parte da un iframe nuovo, senza stato residuo.
  * La UI React legge gli snapshot immutabili via `subscribe`/`getSnapshot`.
  */
@@ -137,8 +141,13 @@ export class Runner {
   /** Console: il JavaScript da passare al worker. Anteprima: il documento dell'iframe. */
   private async prepare(req: RunRequest, target: RunTarget): Promise<string> {
     if (target === 'console') return toJavaScript(req.code, req.lang)
-    if (req.lang === 'HTML') return htmlDocument(req.code)
+    if (req.lang === 'HTML') return htmlDocument(await this.withAssets(req.code, req.assets))
+    if (req.lang === 'Markdown') return htmlDocument(await this.withAssets(await markdownDocument(req.code), req.assets))
     return reactDocument(await toJavaScript(req.code, req.lang), req.code.split('\n').length)
+  }
+
+  private withAssets(html: string, assets: PreviewAssets | null | undefined) {
+    return assets ? rewriteHtml(html, assets.baseDir, assets.resolve) : html
   }
 
   /** Contenitore del pannello Anteprima: l'iframe vi viene montato appena disponibile. */

@@ -10,6 +10,7 @@ const TARGETS: Record<string, RunTarget> = {
   JSX: 'preview',
   TSX: 'preview',
   HTML: 'preview',
+  Markdown: 'preview',
 }
 
 /** Dove va eseguito un documento di questo linguaggio, o null se non è eseguibile. */

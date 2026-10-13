@@ -1,0 +1,22 @@
+/** Scorciatoie da tastiera, mostrate in Aiuto → Scorciatoie (le stesse del README). */
+export const SHORTCUTS: Array<[string, string]> = [
+  ['Palette dei comandi', 'Ctrl+Shift+P / F1'],
+  ['Vai a una tab aperta', 'Ctrl+P'],
+  ['Nuova tab', 'Ctrl+N (nella PWA) / Alt+N'],
+  ['Apri', 'Ctrl+O'],
+  ['Salva / Salva con nome', 'Ctrl+S / Ctrl+Shift+S'],
+  ['Chiudi tab', 'Ctrl+W (nella PWA) / Alt+W'],
+  ['Dividi a destra (stesso file, scroll separato)', 'Ctrl+\\'],
+  ['A capo automatico', 'Alt+Z'],
+  ['Tab successiva / precedente', 'Ctrl+Tab / Ctrl+Shift+Tab, Ctrl+PgGiù / Ctrl+PgSu'],
+  ['Cerca / sostituisci', 'Ctrl+F / Ctrl+H'],
+  ['Vai alla riga', 'Ctrl+Alt+G'],
+  ['Formatta documento (Prettier)', 'Shift+Alt+F'],
+  ['Espandi abbreviazione Emmet', 'Tab (o Ctrl+E)'],
+  ['Mostra i suggerimenti', 'Ctrl+Spazio'],
+  ['Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown)', 'Ctrl+Enter'],
+  ['Seleziona occorrenza successiva', 'Ctrl+D'],
+  ['Chiudi / apri blocco', 'Ctrl+Shift+[ / Ctrl+Shift+]'],
+  ['Chiudi tutto / apri tutto', 'Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J'],
+  ['Chiudi livello N', 'Ctrl+K Ctrl+1…5'],
+]

@@ -1,3 +1,4 @@
+import { decode, type Encoding } from './encoding'
 import type { Eol } from './store'
 
 /** File System Access API disponibile (Chromium desktop). Altrove: upload/download. */
@@ -7,7 +8,10 @@ export interface OpenedFile {
   name: string
   content: string
   eol: Eol
+  encoding: Encoding
   handle?: FileSystemFileHandle
+  /** `lastModified` del file su disco quando è stato letto (solo con handle) */
+  mtime?: number
 }
 
 export function detectEol(text: string): Eol {
@@ -17,14 +21,24 @@ export function detectEol(text: string): Eol {
   return lf === crlf + 1 ? 'CRLF' : 'LF'
 }
 
-async function readFile(file: File, handle?: FileSystemFileHandle): Promise<OpenedFile> {
-  let content = await file.text()
-  if (content.charCodeAt(0) === 0xfeff) content = content.slice(1) // BOM UTF-8
-  return { name: file.name, content, eol: detectEol(content), handle }
+async function readFile(file: File, handle?: FileSystemFileHandle, encoding?: Encoding): Promise<OpenedFile> {
+  const { text, encoding: found } = decode(new Uint8Array(await file.arrayBuffer()), encoding)
+  return { name: file.name, content: text, eol: detectEol(text), encoding: found, handle, mtime: handle ? file.lastModified : undefined }
 }
 
-export function readHandle(handle: FileSystemFileHandle) {
-  return handle.getFile().then((f) => readFile(f, handle))
+/** Legge il file; senza `encoding` la codifica viene rilevata dal contenuto. */
+export function readHandle(handle: FileSystemFileHandle, encoding?: Encoding) {
+  return handle.getFile().then((f) => readFile(f, handle, encoding))
+}
+
+/** `lastModified` attuale del file su disco, null se non esiste più. */
+export async function diskMtime(handle: FileSystemFileHandle): Promise<number | null> {
+  try {
+    return (await handle.getFile()).lastModified
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'NotFoundError') return null
+    throw err
+  }
 }
 
 export async function ensurePermission(handle: FileSystemHandle, mode: 'read' | 'readwrite'): Promise<boolean> {
@@ -40,7 +54,7 @@ export async function pickFiles(): Promise<OpenedFile[]> {
   if (hasFsAccess) {
     try {
       const handles = await window.showOpenFilePicker({ multiple: true })
-      return Promise.all(handles.map(readHandle))
+      return Promise.all(handles.map((h) => readHandle(h)))
     } catch (err) {
       if (isAbort(err)) return []
       throw err
@@ -61,15 +75,17 @@ export function serialize(content: string, eol: Eol) {
   return eol === 'CRLF' ? content.replace(/\n/g, '\r\n') : content
 }
 
-export async function writeHandle(handle: FileSystemFileHandle, data: string) {
+/** Scrive il file e restituisce il suo nuovo `lastModified`. */
+export async function writeHandle(handle: FileSystemFileHandle, data: Uint8Array<ArrayBuffer>): Promise<number> {
   if (!(await ensurePermission(handle, 'readwrite'))) throw new Error('Permesso di scrittura negato')
   const w = await handle.createWritable()
   await w.write(data)
   await w.close()
+  return (await handle.getFile()).lastModified
 }
 
 /** Salva con nome. Restituisce il nuovo handle, `null` se annullato, `undefined` se scaricato (fallback). */
-export async function saveAs(suggestedName: string, data: string): Promise<FileSystemFileHandle | null | undefined> {
+export async function saveAs(suggestedName: string, data: Uint8Array<ArrayBuffer>): Promise<FileSystemFileHandle | null | undefined> {
   if (hasFsAccess) {
     try {
       const handle = await window.showSaveFilePicker({ suggestedName })
@@ -80,7 +96,7 @@ export async function saveAs(suggestedName: string, data: string): Promise<FileS
       throw err
     }
   }
-  const url = URL.createObjectURL(new Blob([data], { type: 'text/plain;charset=utf-8' }))
+  const url = URL.createObjectURL(new Blob([data], { type: 'text/plain' }))
   const a = document.createElement('a')
   a.href = url
   a.download = suggestedName
@@ -105,4 +121,27 @@ export async function filesFromDrop(dt: DataTransfer): Promise<OpenedFile[]> {
     else if (p.file) out.push(await readFile(p.file))
   }
   return out
+}
+
+export const hasFolderAccess = typeof window !== 'undefined' && 'showDirectoryPicker' in window
+
+/** Sceglie una cartella (solo lettura); null se annullato. */
+export async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    return await window.showDirectoryPicker({ mode: 'read' })
+  } catch (err) {
+    if (isAbort(err)) return null
+    throw err
+  }
+}
+
+/** Handle del file al percorso indicato nella cartella, null se non esiste. */
+export async function fileInFolder(dir: FileSystemDirectoryHandle, path: string[]): Promise<FileSystemFileHandle | null> {
+  try {
+    let cur = dir
+    for (const seg of path.slice(0, -1)) cur = await cur.getDirectoryHandle(seg)
+    return await cur.getFileHandle(path[path.length - 1])
+  } catch {
+    return null
+  }
 }

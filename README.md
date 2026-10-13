@@ -9,6 +9,7 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 - **Menu tradizionale** (File, Modifica, Visualizza, Aiuto) con le scorciatoie indicate accanto alle voci.
 - **Pannelli divisi**: affianca o impila più pannelli (Visualizza → Dividi a destra / in basso, oppure i pulsanti a destra della barra delle tab). Ogni pannello ha le sue tab. Lo stesso file aperto in due pannelli resta sincronizzato, ma cursore, scroll, blocchi chiusi e cronologia di annulla sono separati: `Ctrl+Z` annulla solo le modifiche fatte in quel pannello. Le tab si trascinano da un pannello all'altro; i divisori si trascinano per ridimensionare (doppio clic per uniformare).
 - **Tab multiple**: la sessione viene salvata in automatico in IndexedDB. Alla riapertura ritrovi pannelli, contenuto, cursore e blocchi chiusi, anche per le tab non salvate su disco.
+- **Tab colorate**: tasto destro su una tab (o Visualizza → Colore tab) per darle un colore. Il colore appartiene al file: se è aperto in più pannelli, tutte le sue tab lo condividono.
 - **File locali**: grazie alla File System Access API, `Ctrl+S` scrive sullo stesso file su disco. C'è anche "Salva con nome".
 - **File recenti**: tiene gli handle dei file, quindi riaprendo un recente il browser chiede solo il permesso.
 - **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.

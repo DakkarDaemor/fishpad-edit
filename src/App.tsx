@@ -36,6 +36,7 @@ import { EditorPane } from './components/EditorPane'
 import { StatusBar } from './components/StatusBar'
 import { ConsolePanel } from './components/ConsolePanel'
 import { PreviewPanel } from './components/PreviewPanel'
+import { tabColorItems } from './components/tabColorMenu'
 import { Runner } from './runner/Runner'
 import { runTarget } from './runner/transpile'
 
@@ -466,6 +467,11 @@ export default function App() {
         { label: 'Riduci testo', action: () => zoom(-1) },
         { label: `Dimensione predefinita (${DEFAULT_SETTINGS.fontSize})`, action: () => setSetting('fontSize', DEFAULT_SETTINGS.fontSize) },
         'separator',
+        {
+          label: 'Colore tab',
+          submenu: active ? tabColorItems(active.color, (c) => wb.setColor(active.id, c)) : [],
+        },
+        'separator',
         { label: 'A capo automatico', shortcut: 'Alt+Z', checked: settings.wrap, action: toggleWrap },
         'separator',
         { label: 'Console', checked: consoleOpen, action: () => setConsoleOpen((o) => !o) },
@@ -529,6 +535,7 @@ export default function App() {
         />
         <PreviewPanel
           runner={runner}
+          docName={runState.preview ? snap.docs.get(runState.preview.docId)?.name : undefined}
           width={previewWidth}
           consoleOpen={consoleOpen}
           onResize={setPreviewWidth}

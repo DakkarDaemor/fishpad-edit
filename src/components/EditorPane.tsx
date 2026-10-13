@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
+import { tabColorVar } from '../workbench/tabColors'
 import type { Doc, Pane, Workbench } from '../workbench/Workbench'
+import { ContextMenu } from './Menu'
+import { tabColorItems } from './tabColorMenu'
 
 const TAB_MIME = 'application/x-fishpad-tab'
 
@@ -22,6 +25,9 @@ const isTabDrag = (e: DragEvent) => e.dataTransfer.types.includes(TAB_MIME)
 export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; docId: string } | null>(null)
+  const closeTabMenu = useCallback(() => setTabMenu(null), [])
+  const menuDoc = tabMenu ? docs.get(tabMenu.docId) : undefined
 
   useEffect(() => wb.attachView(pane.id, hostRef.current!), [wb, pane.id])
 
@@ -59,7 +65,8 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
             <div
               key={id}
               data-doc-id={id}
-              className={`tab${id === pane.activeDocId ? ' current' : ''}`}
+              className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
+              style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
               title={d.handle ? d.name : `${d.name} (non salvato su disco)`}
               draggable
               onDragStart={(e) => {
@@ -68,6 +75,10 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
               }}
               onClick={() => wb.activate(pane.id, id)}
               onAuxClick={(e) => e.button === 1 && wb.closeTab(pane.id, id)}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setTabMenu({ x: e.clientX, y: e.clientY, docId: id })
+              }}
             >
               <span className="tab-name">{d.name}</span>
               <button
@@ -107,6 +118,19 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
         </div>
       </nav>
       <div className="editor" ref={hostRef} />
+      {tabMenu && menuDoc && (
+        <ContextMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          onClose={closeTabMenu}
+          items={[
+            { heading: 'Colore' },
+            ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),
+            'separator',
+            { label: 'Chiudi tab', action: () => wb.closeTab(pane.id, menuDoc.id) },
+          ]}
+        />
+      )}
     </section>
   )
 }

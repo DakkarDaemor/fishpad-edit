@@ -3,6 +3,8 @@ import type { Runner } from '../runner/Runner'
 
 interface Props {
   runner: Runner
+  /** nome attuale del documento (cambia con Salva con nome); se chiuso resta quello dell'avvio */
+  docName?: string
   width: number
   consoleOpen: boolean
   onResize: (width: number) => void
@@ -11,7 +13,7 @@ interface Props {
 }
 
 /** Pannello a destra con la pagina HTML o il componente React del documento in anteprima. */
-export function PreviewPanel({ runner, width, consoleOpen, onResize, onReload, onToggleConsole }: Props) {
+export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole }: Props) {
   const { preview, alive, entries } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
   const errors = entries.filter((e) => e.level === 'error').length
   const host = useCallback((el: HTMLDivElement | null) => runner.setPreviewHost(el), [runner])
@@ -28,13 +30,14 @@ export function PreviewPanel({ runner, width, consoleOpen, onResize, onReload, o
   }
 
   if (!preview) return null
+  const name = docName ?? preview.name
   return (
     <>
       <div className="gutter preview-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
       <aside className="preview" style={{ width }}>
         <header className="panel-bar">
           <span className="panel-title">Anteprima</span>
-          <span className="preview-name" title={preview.name}>{preview.name}</span>
+          <span className="preview-name" title={name}>{name}</span>
           <div className="spacer" />
           <button onClick={onReload} title="Ricarica (Ctrl+Enter)">↻ Ricarica</button>
           <button onClick={() => runner.stop()} disabled={!alive} title="Ferma la pagina (si riavvia alla prossima modifica)">■ Stop</button>

@@ -1,6 +1,7 @@
 import { del, get, set } from 'idb-keyval'
 import type { Indent } from './editor/indentation'
 import type { Layout } from './workbench/layout'
+import type { TabColor } from './workbench/tabColors'
 
 export type Eol = 'LF' | 'CRLF'
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -24,6 +25,7 @@ export interface SavedDoc {
   eol: Eol
   content: string
   handle?: FileSystemFileHandle
+  color?: TabColor
 }
 
 /** Un documento aperto in un pannello: cursore e blocchi chiusi sono per pannello. */

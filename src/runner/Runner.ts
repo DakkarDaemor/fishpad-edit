@@ -201,6 +201,12 @@ export class Runner {
         })
         this.emit()
         break
+      case 'key': {
+        // scorciatoia premuta nell'anteprima: la gestisce il listener globale dell'editor
+        const { code, key, ctrlKey, metaKey, shiftKey } = data
+        window.dispatchEvent(new KeyboardEvent('keydown', { code, key, ctrlKey, metaKey, shiftKey, cancelable: true }))
+        break
+      }
       case 'clear':
         this.entries = []
         this.emit()

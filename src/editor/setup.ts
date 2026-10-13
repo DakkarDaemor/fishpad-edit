@@ -18,6 +18,7 @@ import {
   codeFolding,
   defaultHighlightStyle,
   foldAll,
+  HighlightStyle,
   foldGutter,
   foldKeymap,
   indentOnInput,
@@ -26,6 +27,7 @@ import {
 } from '@codemirror/language'
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
+import { tags as t } from '@lezer/highlight'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { foldLevel, indentationFolding, restoreFoldEffects } from './folding'
 import { loadLanguage } from './languages'
@@ -59,8 +61,19 @@ const lightTheme = EditorView.theme(
   { dark: false },
 )
 
+// Lo stile di default di CodeMirror non colora tag e attributi: HTML, XML e JSX resterebbero neri.
+const lightHighlight = syntaxHighlighting(
+  HighlightStyle.define([
+    ...defaultHighlightStyle.specs,
+    { tag: [t.tagName, t.standard(t.tagName)], color: '#22863a' },
+    { tag: t.attributeName, color: '#6f42c1' },
+    { tag: t.angleBracket, color: '#6a737d' },
+    { tag: t.character, color: '#e40' },
+  ]),
+)
+
 export function themeExtension(dark: boolean): Extension {
-  return dark ? oneDark : lightTheme
+  return dark ? oneDark : [lightTheme, lightHighlight]
 }
 
 const fontCache = new Map<number, Extension>()

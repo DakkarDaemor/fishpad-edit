@@ -13,6 +13,7 @@ import {
   type Indent,
 } from '../editor/indentation'
 import { detectByContent, detectByFilename } from '../editor/languages'
+import type { TabColor } from './tabColors'
 import { saveSession, type Eol, type Session } from '../store'
 import { isValidLayout, leaf, paneIds, removePane, setSizes, splitPane, type Layout, type SplitDir } from './layout'
 
@@ -28,6 +29,7 @@ export interface Doc {
   dirty: boolean
   eol: Eol
   handle?: FileSystemFileHandle
+  color?: TabColor
 }
 
 export interface Pane {
@@ -64,6 +66,7 @@ export interface NewDocInput {
   dirty?: boolean
   cursor?: number
   folds?: Array<[number, number]>
+  color?: TabColor
 }
 
 /** Segna le modifiche replicate da un altro pannello sullo stesso documento (da non replicare di nuovo). */
@@ -239,6 +242,10 @@ export class Workbench {
     return changes.length ? `Convertite ${changes.length} righe in ${indentLabel(to)}` : 'Niente da convertire'
   }
 
+  setColor(docId: string, color: TabColor | null) {
+    this.patchDoc(docId, { color: color ?? undefined })
+  }
+
   toggleEol() {
     const d = this.activeDoc
     if (d) this.patchDoc(d.id, { eol: d.eol === 'LF' ? 'CRLF' : 'LF', dirty: true })
@@ -260,6 +267,7 @@ export class Workbench {
       dirty: input.dirty ?? false,
       eol: input.eol,
       handle: input.handle,
+      color: input.color,
     }
     this.docs.set(id, doc)
     this.createInstance(paneId, doc, input.content, input.cursor, input.folds)

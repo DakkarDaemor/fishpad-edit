@@ -14,6 +14,7 @@ export type SandboxMessage =
   | { kind: 'log'; level: LogLevel; text: string; line?: number }
   | { kind: 'clear' }
   | { kind: 'done'; ok: boolean }
+  | { kind: 'key'; code: string; key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }
 
 export const SANDBOX_TAG = 'fishpad-run'
 
@@ -138,6 +139,16 @@ Object.assign(console, {
 
 self.addEventListener('error', (e) => { e.preventDefault(); report(e.error ?? e.message, e.lineno); });
 self.addEventListener('unhandledrejection', (e) => { e.preventDefault(); report(e.reason); });
+// Nell'anteprima il focus può stare nella pagina: le scorciatoie dell'editor (Ctrl+S, …) vanno
+// girate all'editor, altrimenti il browser salva la pagina, apre una finestra o chiude la tab.
+if (typeof document !== 'undefined') {
+  const SHORTCUTS = ['KeyS', 'KeyO', 'KeyN', 'KeyW', 'Enter'];
+  self.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || !SHORTCUTS.includes(e.code)) return;
+    e.preventDefault();
+    send({ kind: 'key', code: e.code, key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey });
+  }, true);
+}
 self.__fishpadBridge = { send, report };
 })();
 `

@@ -14,7 +14,7 @@ interface Message {
  * Esegue il bridge in un contesto vm che simula il worker. Valori ed errori vanno creati
  * dentro il contesto (con run), altrimenti gli `instanceof` del bridge non li riconoscono.
  */
-function sandbox(opts: Partial<BridgeOptions> = {}) {
+function sandbox(opts: Partial<BridgeOptions> = {}, globals: object = {}) {
   const messages: Message[] = []
   const listeners: Record<string, (e: unknown) => void> = {}
   const ctx = vm.createContext({
@@ -22,6 +22,7 @@ function sandbox(opts: Partial<BridgeOptions> = {}) {
     self: { addEventListener: (type: string, fn: (e: unknown) => void) => (listeners[type] = fn) },
     console: {},
     performance: { now: () => 0 },
+    ...globals,
   })
   vm.runInContext(bridgeSource({ offset: 0, lines: 1000, target: 'worker', frames: 'blob', ...opts }), ctx)
   const run = (src: string): unknown => vm.runInContext(src, ctx)
@@ -135,5 +136,32 @@ describe('console', () => {
       ['error', 'Assertion failed: sì'],
       ['warn', 'w'],
     ])
+  })
+})
+
+describe("scorciatoie nell'anteprima", () => {
+  const keydown = (init: object) => {
+    let prevented = false
+    return { event: { ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, key: '', ...init, preventDefault: () => (prevented = true) }, prevented: () => prevented }
+  }
+
+  it("gira Ctrl+S all'editor e blocca il salvataggio pagina del browser", () => {
+    const sent: Message[] = []
+    const s = sandbox({ target: 'parent' }, { document: {}, parent: { postMessage: (m: Message) => sent.push(m) } })
+    const k = keydown({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' })
+    s.listeners.keydown(k.event)
+    expect(k.prevented()).toBe(true)
+    expect(sent.at(-1)).toMatchObject({ kind: 'key', code: 'KeyS', ctrlKey: true, shiftKey: true })
+  })
+
+  it('lascia passare i tasti normali', () => {
+    const s = sandbox({ target: 'parent' }, { document: {}, parent: { postMessage: () => {} } })
+    const k = keydown({ code: 'KeyS', key: 's' })
+    s.listeners.keydown(k.event)
+    expect(k.prevented()).toBe(false)
+  })
+
+  it('nel worker non registra listener da tastiera', () => {
+    expect(sandbox().listeners.keydown).toBeUndefined()
   })
 })

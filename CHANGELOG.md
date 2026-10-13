@@ -2,6 +2,16 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 4.0
+
+- Tab colorate: tasto destro su una tab (o Visualizza → Colore tab) per scegliere un colore pastello. La tab aperta sfuma nello sfondo dell'editor e, nel pannello attivo, ha un bordo alto nel suo colore. Il colore è del file, quindi se è aperto in più pannelli tutte le sue tab cambiano insieme, e viene ripristinato alla riapertura.
+- L'intestazione dell'anteprima mostra il nome aggiornato del file dopo "Salva con nome".
+
+## 3.1
+
+- `Ctrl+S` con il focus nell'anteprima salvava la pagina web dal browser invece del file: ora le scorciatoie dell'editor (`Ctrl+S`, `Ctrl+O`, `Ctrl+N`, `Ctrl+W`, `Ctrl+Enter`) funzionano anche lì.
+- Tema chiaro: tag e attributi di HTML, XML e JSX/TSX (componenti compresi) ora sono colorati.
+
 ## 3.0
 
 - Console JavaScript e TypeScript: `Ctrl+Enter` (o menu Esegui) esegue il file attivo, o solo il testo selezionato, e mostra l'output in un pannello in basso. Si ridimensiona trascinando il bordo e si apre e chiude da Visualizza → Console.

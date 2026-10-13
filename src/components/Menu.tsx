@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 
 export interface MenuAction {
   label: string
@@ -6,6 +6,8 @@ export interface MenuAction {
   checked?: boolean
   disabled?: boolean
   danger?: boolean
+  /** colore CSS mostrato come quadratino accanto all'etichetta */
+  swatch?: string
   action?: () => void
   submenu?: MenuItem[]
 }
@@ -40,7 +42,10 @@ function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) 
               }}
             >
               <span className="menu-check">{item.checked ? '✓' : ''}</span>
-              <span className="menu-label">{item.label}</span>
+              <span className="menu-label">
+                {item.swatch && <span className="menu-swatch" style={{ background: item.swatch }} />}
+                {item.label}
+              </span>
               <span className="menu-shortcut">{hasSub ? '▸' : item.shortcut}</span>
             </button>
             {hasSub && item.submenu!.length > 0 && (
@@ -129,6 +134,25 @@ export function MenuButton({
           <MenuList items={items} onDone={close} />
         </div>
       )}
+    </div>
+  )
+}
+
+/** Menu contestuale in posizione fissa (tasto destro). Si chiude al clic fuori, con Esc o dopo una scelta. */
+export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; items: MenuItem[]; onClose: () => void }) {
+  const ref = useDismiss(true, onClose)
+  const [pos, setPos] = useState({ left: x, top: y })
+  // resta dentro la finestra: se non c'è spazio a destra o in basso si sposta
+  useLayoutEffect(() => {
+    const { width, height } = ref.current!.getBoundingClientRect()
+    setPos({
+      left: Math.max(0, Math.min(x, window.innerWidth - width - 4)),
+      top: Math.max(0, Math.min(y, window.innerHeight - height - 4)),
+    })
+  }, [x, y, ref])
+  return (
+    <div className="menu-panel context-menu" style={pos} ref={ref} onContextMenu={(e) => e.preventDefault()}>
+      <MenuList items={items} onDone={onClose} />
     </div>
   )
 }

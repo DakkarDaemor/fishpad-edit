@@ -49,8 +49,21 @@ export default defineConfig({
         file_handlers: [{ action: base, accept: { 'text/plain': TEXT_EXTENSIONS } }],
         // Se l'app è già aperta, i file arrivano nella finestra esistente come nuove tab
         launch_handler: { client_mode: ['focus-existing', 'auto'] },
+        // "Condividi → Fishpad" da altre app (Android): lo riceve public/share-target-sw.js
+        share_target: {
+          action: `${base}share-target`,
+          method: 'POST',
+          enctype: 'multipart/form-data',
+          params: {
+            title: 'title',
+            text: 'text',
+            url: 'url',
+            files: [{ name: 'files', accept: ['text/*', 'application/json', 'application/xml', 'image/svg+xml', ...TEXT_EXTENSIONS] }],
+          },
+        },
       },
       workbox: {
+        importScripts: ['share-target-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },

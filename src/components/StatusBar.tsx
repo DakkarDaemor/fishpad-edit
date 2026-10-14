@@ -2,6 +2,7 @@ import { indentLabel, type Indent } from '../editor/indentation'
 import { ENCODING_LABELS, type Encoding } from '../encoding'
 import { languageNames } from '../editor/languages'
 import { hasFsAccess } from '../fs'
+import { hasWorkspace } from '../workspace'
 import type { CursorStatus, Doc } from '../workbench/Workbench'
 import { MenuButton, type MenuItem } from './Menu'
 
@@ -61,7 +62,7 @@ export function StatusBar(props: Props) {
         Ln {status.line}, Col {status.col}
         {status.sel > 0 && ` (${status.sel} selezionati)`}
       </span>
-      <span>{status.lines} righe</span>
+      <span className="status-lines">{status.lines} righe</span>
       {doc?.request && (
         <button
           className={!fetching && (doc.response?.status ?? 0) >= 400 ? 'warn' : undefined}
@@ -77,7 +78,10 @@ export function StatusBar(props: Props) {
               : 'GET ↻'}
         </button>
       )}
-      {!hasFsAccess && <span className="warn" title="Usa Chrome o Edge per salvare direttamente su disco">Modalità ridotta</span>}
+      {/* con lo spazio dell'app i file si salvano lì; senza, solo con un download */}
+      {!hasFsAccess && !hasWorkspace && (
+        <span className="warn" title="Questo browser non permette di salvare i file: si scaricano. Su desktop usa Chrome o Edge">Modalità ridotta</span>
+      )}
       <div className="spacer" />
       {doc && (
         <>

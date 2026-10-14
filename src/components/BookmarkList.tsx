@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { Bookmark } from '../store'
 import { ContextMenu } from './Menu'
+import { longPress } from './touch'
 
 interface Props {
   list: Bookmark[]
@@ -51,6 +52,7 @@ export function BookmarkList({ list, canAdd, onAdd, onOpenUrl, onOpen, onEdit, o
                 e.preventDefault()
                 setMenu({ x: e.clientX, y: e.clientY, bookmark: b })
               }}
+              {...longPress((x, y) => setMenu({ x, y, bookmark: b }))}
             >
               <span className={`bookmark-kind ${b.kind}`}>{b.kind === 'url' ? 'GET' : 'file'}</span>
               <span className="tree-name">{b.name}</span>

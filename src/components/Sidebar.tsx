@@ -3,11 +3,13 @@ import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from '
 interface Props {
   width: number
   onResize: (width: number) => void
+  /** schermo del telefono: un cassetto sopra l'editor, che si chiude toccando fuori */
+  drawer?: { onClose: () => void }
   children: ReactNode
 }
 
 /** Barra laterale a sinistra, ridimensionabile trascinando il bordo destro. */
-export function Sidebar({ width, onResize, children }: Props) {
+export function Sidebar({ width, onResize, drawer, children }: Props) {
   const drag = useRef<{ x: number; w: number } | null>(null)
   const onDown = (e: ReactPointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -17,6 +19,14 @@ export function Sidebar({ width, onResize, children }: Props) {
     if (!drag.current) return
     const max = Math.max(160, window.innerWidth - 320)
     onResize(Math.round(Math.min(max, Math.max(160, drag.current.w + e.clientX - drag.current.x))))
+  }
+  if (drawer) {
+    return (
+      <>
+        <div className="drawer-backdrop" onClick={drawer.onClose} />
+        <aside className="sidebar drawer">{children}</aside>
+      </>
+    )
   }
   return (
     <>

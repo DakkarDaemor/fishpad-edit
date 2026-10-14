@@ -2,6 +2,16 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 7.0
+
+- Telefono e tablet: sotto i 700 px di larghezza l'interfaccia passa alla disposizione per telefono. Il menu sta dietro ☰ e i sottomenu si aprono uno alla volta, con "‹" per tornare indietro. Preferiti ed esplora file sono in un cassetto che si apre dal pulsante in alto a destra. Si vede un pannello alla volta (⇄ passa al successivo se la sessione ne ha più di uno), e l'anteprima copre l'editor: "‹ Editor" torna al codice senza chiuderla, "Anteprima" in alto la riporta in primo piano. In alto a destra c'è anche ▶ per eseguire il file.
+- File dell'app: dove il browser non dà accesso alle cartelle del disco (telefoni, tablet, Safari, Firefox), l'esplora file mostra una cartella privata dell'app. Lì `Ctrl+S` (o File → Salva) salva davvero, anche in sottocartelle ("note/oggi.md"), e la sessione ricorda a quale file è collegata ogni tab. Con File → Importa, o ⇩ nell'esplora file, si copiano dentro i file del dispositivo; con File → Esporta / condividi, o dal menu di un file, se ne porta fuori una copia: sui dispositivi touch col foglio Condividi del sistema (salva in File o Drive, invia a un'altra app), altrove con un download.
+- Condividi → Fishpad (Android, con l'app installata): un file di testo condiviso da un'altra app si apre in una tab, un link si apre come tab URL, e un testo in una nuova tab.
+- Al tocco: la pressione prolungata su tab, file, cartelle e preferiti apre il menu che su desktop compare col tasto destro. Mentre si scrive nell'editor compare sopra la tastiera una barra con i tasti che mancano (Tab, che espande anche le abbreviazioni Emmet, Esc, annulla e ripeti, frecce, parentesi e simboli), oltre a Cerca ed Esegui. Mostrare una tab non apre più la tastiera da solo, e bottoni, tab e voci dei menu sono più grandi.
+- L'app resta nella parte visibile sopra la tastiera virtuale, anche su iPhone e iPad, e lascia spazio a notch e barre di sistema nell'app installata. Su iPhone e iPad toccare un campo non ingrandisce più la pagina.
+- I sottomenu (Apri recente, Folding, Tema, Colore tab) si aprono anche con un clic, non solo passandoci sopra.
+- Limiti del dispositivo: alla prima apertura una finestra spiega cosa cambia sul browser in uso (file che restano nell'app, schermata Home su iPhone e iPad, installazione su Android, comandi senza tastiera fisica). Mostra solo gli avvisi non ancora visti, e si riapre da Aiuto → Limiti su questo dispositivo. Su desktop con Chrome o Edge non compare.
+
 ## 6.0
 
 - Esplora file: File → Apri cartella mostra la cartella in una barra laterale a sinistra (`Ctrl+B`, o Visualizza → Barra laterale). Un clic apre il file, le cartelle si leggono solo quando le apri, e l'albero si aggiorna tornando all'app. Col tasto destro si creano file e cartelle, si rinomina, si elimina (con conferma: non va nel Cestino) e si copia il percorso relativo. Rinominando un file o una cartella, le tab aperte seguono il nuovo percorso e `Ctrl+S` continua a salvare nel posto giusto.

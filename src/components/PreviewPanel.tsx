@@ -10,10 +10,12 @@ interface Props {
   onResize: (width: number) => void
   onReload: () => void
   onToggleConsole: () => void
+  /** schermo del telefono: l'anteprima copre l'editor, e si nasconde senza chiuderla */
+  overlay?: { hidden: boolean; onHide: () => void }
 }
 
 /** Pannello a destra con la pagina HTML o il componente React del documento in anteprima. */
-export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole }: Props) {
+export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole, overlay }: Props) {
   const { preview, alive, entries } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
   const errors = entries.filter((e) => e.level === 'error').length
   const host = useCallback((el: HTMLDivElement | null) => runner.setPreviewHost(el), [runner])
@@ -33,9 +35,15 @@ export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, on
   const name = docName ?? preview.name
   return (
     <>
-      <div className="gutter preview-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
-      <aside className="preview" style={{ width }}>
+      {!overlay && (
+        <div className="gutter preview-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
+      )}
+      {/* nascosta e non smontata: l'iframe della pagina resta vivo */}
+      <aside className={`preview${overlay ? ' overlay' : ''}`} style={overlay ? undefined : { width }} hidden={overlay?.hidden}>
         <header className="panel-bar">
+          {overlay && (
+            <button onClick={overlay.onHide} title="Torna all'editor (l'anteprima resta aperta)">‹ Editor</button>
+          )}
           <span className="panel-title">Anteprima</span>
           <span className="preview-name" title={name}>{name}</span>
           <div className="spacer" />

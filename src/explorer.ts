@@ -1,4 +1,5 @@
-/** Operazioni sulla cartella aperta nell'esplora file (File System Access API, solo Chromium). */
+/** Operazioni sulla cartella aperta nell'esplora file (una cartella del disco, o lo spazio dell'app). */
+import { writeBytes } from './fs'
 
 export type EntryHandle = FileSystemFileHandle | FileSystemDirectoryHandle
 
@@ -84,9 +85,7 @@ export async function renameEntry(parent: FileSystemDirectoryHandle, handle: Ent
   // con la copia, cambiare solo le maiuscole su Windows riaprirebbe lo stesso file e poi lo cancellerebbe
   if (handle.kind === 'directory' || caseOnly) throw new Error('Il browser non permette questa modifica del nome')
   const copy = await parent.getFileHandle(newName, { create: true })
-  const w = await copy.createWritable()
-  await w.write(await handle.getFile())
-  await w.close()
+  await writeBytes(copy, await handle.getFile())
   await parent.removeEntry(handle.name)
   return copy
 }

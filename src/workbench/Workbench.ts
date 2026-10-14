@@ -121,6 +121,8 @@ export class Workbench {
   private snapshot!: Snapshot
   private persistTimer?: number
   private detectTimers = new Map<string, number>()
+  /** Mostrare un documento gli dà il focus. Non sui dispositivi touch, dove aprirebbe la tastiera virtuale. */
+  private autoFocus = true
 
   constructor(settings: EditorSettings) {
     this.settings = settings
@@ -536,6 +538,7 @@ export class Workbench {
     const k = docId ? instanceKey(paneId, docId) : null
     const st = k ? this.states.get(k) : undefined
     if (!view || !st || !k) return
+    focus &&= this.autoFocus
     if (view.state === st) {
       if (focus) view.focus()
       return
@@ -546,6 +549,10 @@ export class Workbench {
     if (top != null) requestAnimationFrame(() => (view.scrollDOM.scrollTop = top))
     else view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })
     if (focus) view.focus()
+  }
+
+  setAutoFocus(on: boolean) {
+    this.autoFocus = on
   }
 
   setEditorSettings(settings: EditorSettings) {

@@ -4,6 +4,7 @@ import type { Indent } from './editor/indentation'
 import type { Layout } from './workbench/layout'
 import type { TabColor } from './workbench/tabColors'
 import type { UrlRequest, UrlResponse } from './remote'
+import { packHandle, unpackHandle, type StoredHandle } from './workspace'
 
 export type Eol = 'LF' | 'CRLF'
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -92,6 +93,7 @@ const KEY_RECENTS = 'recents'
 // chiave storica: prima della 6.0 era la cartella dell'anteprima, ora è quella dell'esplora file
 const KEY_FOLDER = 'previewFolder'
 const KEY_BOOKMARKS = 'bookmarks'
+const KEY_SEEN_NOTICES = 'seenNotices'
 const MAX_RECENTS = 12
 
 // IndexedDB può non essere disponibile (navigazione privata, storage bloccato): non deve rompere l'app.
@@ -104,8 +106,24 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
   }
 }
 
-export const loadSession = () => safe(async () => migrate(await get<Session | SessionV1>(KEY_SESSION)), null)
-export const saveSession = (s: Session) => safe(() => set(KEY_SESSION, s), undefined)
+/** Elemento con l'handle convertito per IndexedDB (vedi `packHandle`). */
+type Packed<T extends { handle?: FileSystemFileHandle }> = Omit<T, 'handle'> & StoredHandle
+
+async function pack<T extends { handle?: FileSystemFileHandle }>({ handle, ...rest }: T): Promise<Packed<T>> {
+  return { ...rest, ...(await packHandle(handle)) }
+}
+
+async function unpack<T extends { handle?: FileSystemFileHandle }>({ handle, workspacePath, ...rest }: Packed<T>) {
+  return { ...rest, handle: await unpackHandle({ handle, workspacePath }) } as T
+}
+
+export const loadSession = () =>
+  safe(async () => {
+    const session = migrate(await get<Session | SessionV1>(KEY_SESSION))
+    // un file dello spazio dell'app eliminato nel frattempo lascia la tab col suo testo, non più collegata
+    return session && { ...session, docs: await Promise.all((session.docs as Array<Packed<SavedDoc>>).map((d) => unpack<SavedDoc>(d))) }
+  }, null)
+export const saveSession = (s: Session) => safe(async () => set(KEY_SESSION, { ...s, docs: await Promise.all(s.docs.map(pack)) }), undefined)
 
 export const loadSettings = () =>
   safe(async () => ({ ...DEFAULT_SETTINGS, ...((await get<Partial<Settings>>(KEY_SETTINGS)) ?? {}) }), DEFAULT_SETTINGS)
@@ -140,5 +158,18 @@ export type Bookmark = { id: string; name: string } & (
   | { kind: 'file'; handle: FileSystemFileHandle }
 )
 
-export const loadBookmarks = () => safe(async () => (await get<Bookmark[]>(KEY_BOOKMARKS)) ?? [], [] as Bookmark[])
-export const saveBookmarks = (list: Bookmark[]) => safe(() => set(KEY_BOOKMARKS, list), undefined)
+type FileBookmark = Extract<Bookmark, { kind: 'file' }>
+
+export const loadBookmarks = () =>
+  safe(async () => {
+    const saved = (await get<Array<Bookmark | Packed<FileBookmark>>>(KEY_BOOKMARKS)) ?? []
+    const list = await Promise.all(saved.map((b) => (b.kind === 'file' ? unpack<FileBookmark>(b as Packed<FileBookmark>) : b)))
+    // i file dello spazio dell'app che non esistono più
+    return list.filter((b) => b.kind === 'url' || b.handle)
+  }, [] as Bookmark[])
+export const saveBookmarks = (list: Bookmark[]) =>
+  safe(async () => set(KEY_BOOKMARKS, await Promise.all(list.map((b) => (b.kind === 'file' ? pack(b) : b)))), undefined)
+
+/** Avvisi sui limiti del dispositivo già mostrati (vedi notices.ts). */
+export const loadSeenNotices = () => safe(async () => (await get<string[]>(KEY_SEEN_NOTICES)) ?? [], [] as string[])
+export const saveSeenNotices = (ids: string[]) => safe(() => set(KEY_SEEN_NOTICES, ids), undefined)

@@ -3,6 +3,7 @@ import { tabColorVar } from '../workbench/tabColors'
 import type { Doc, Pane, Workbench } from '../workbench/Workbench'
 import { ContextMenu, type MenuItem } from './Menu'
 import { tabColorItems } from './tabColorMenu'
+import { COARSE_QUERY, longPress, useMediaQuery } from './touch'
 
 const TAB_MIME = 'application/x-fishpad-tab'
 
@@ -14,6 +15,8 @@ interface Props {
   multiPane: boolean
   /** voci aggiunte dall'app al menu col tasto destro della tab (preferiti, ricarica…) */
   tabMenuExtra: (doc: Doc) => MenuItem[]
+  /** schermo del telefono: un pannello alla volta, senza dividere; con più pannelli, passa al successivo */
+  compact?: { onNextPane?: () => void }
 }
 
 interface DraggedTab {
@@ -31,12 +34,14 @@ function tabTitle(d: Doc) {
   return `${d.name} (non salvato su disco)`
 }
 
-export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: Props) {
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; docId: string } | null>(null)
   const closeTabMenu = useCallback(() => setTabMenu(null), [])
   const menuDoc = tabMenu ? docs.get(tabMenu.docId) : undefined
+  // col dito il trascinamento delle tab si confonderebbe con lo scorrimento della barra
+  const touch = useMediaQuery(COARSE_QUERY)
 
   useEffect(() => wb.attachView(pane.id, hostRef.current!), [wb, pane.id])
 
@@ -78,8 +83,8 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: 
               data-doc-id={id}
               className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
               style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
-              title={`${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
-              draggable
+              title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
+              draggable={!touch}
               onDragStart={(e) => {
                 e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
                 e.dataTransfer.effectAllowed = 'copyMove'
@@ -90,6 +95,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: 
                 e.preventDefault()
                 setTabMenu({ x: e.clientX, y: e.clientY, docId: id })
               }}
+              {...longPress((x, y) => setTabMenu({ x, y, docId: id }))}
             >
               <span className="tab-name">{d.name}</span>
               <button
@@ -109,26 +115,34 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: 
         <button className="tab-new" onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
         <div className="spacer" />
         <div className="pane-actions">
-          <button
-            onClick={() => void wb.split('row', pane.id)}
-            title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
-            aria-label="Dividi a destra"
-          >
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
-              <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" />
-            </svg>
-          </button>
-          <button
-            onClick={() => void wb.split('column', pane.id)}
-            title="Dividi in basso: apre lo stesso file in un nuovo pannello sotto, con scroll e cursore propri"
-            aria-label="Dividi in basso"
-          >
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
-              <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
-            </svg>
-          </button>
+          {compact ? (
+            compact.onNextPane && (
+              <button onClick={compact.onNextPane} title="Passa al pannello successivo" aria-label="Pannello successivo">⇄</button>
+            )
+          ) : (
+            <>
+              <button
+                onClick={() => void wb.split('row', pane.id)}
+                title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
+                aria-label="Dividi a destra"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+                  <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" />
+                </svg>
+              </button>
+              <button
+                onClick={() => void wb.split('column', pane.id)}
+                title="Dividi in basso: apre lo stesso file in un nuovo pannello sotto, con scroll e cursore propri"
+                aria-label="Dividi in basso"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+                  <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
+                </svg>
+              </button>
+            </>
+          )}
           {multiPane && (
             <button onClick={() => wb.closePane(pane.id)} title="Chiudi pannello" aria-label="Chiudi pannello">
               ×
@@ -143,9 +157,13 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: 
           y={tabMenu.y}
           onClose={closeTabMenu}
           items={[
-            { label: 'Apri a destra', action: () => void wb.split('row', pane.id, menuDoc.id) },
-            { label: 'Apri in basso', action: () => void wb.split('column', pane.id, menuDoc.id) },
-            'separator',
+            ...(compact
+              ? []
+              : [
+                  { label: 'Apri a destra', action: () => void wb.split('row', pane.id, menuDoc.id) },
+                  { label: 'Apri in basso', action: () => void wb.split('column', pane.id, menuDoc.id) },
+                  'separator' as const,
+                ]),
             ...tabMenuExtra(menuDoc),
             { heading: 'Colore' },
             ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),

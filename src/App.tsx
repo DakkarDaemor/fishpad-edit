@@ -12,27 +12,36 @@ import {
   detectEol,
   diskMtime,
   ensurePermission,
+  exportFile,
   fileInFolder,
   filesFromDrop,
   hasFolderAccess,
   hasFsAccess,
+  permissionState,
   pickFiles,
   pickFolder,
+  pickUploads,
+  readFile,
   readHandle,
   saveAs,
   serialize,
   writeHandle,
   type OpenedFile,
 } from './fs'
+import { WORKSPACE_LABEL, hasWorkspace, importFiles, parseWorkspacePath, workspaceRoot, writeInWorkspace } from './workspace'
+import { sharedUrl, takeShared, type Shared } from './share'
+import { detectEnv, deviceNotices, type Notice } from './notices'
 import {
   DEFAULT_SETTINGS,
   addRecent,
   clearRecents,
   loadFolder,
   loadRecents,
+  loadSeenNotices,
   loadSession,
   loadSettings,
   saveFolder,
+  saveSeenNotices,
   saveSettings,
   type Bookmark,
   type RecentFile,
@@ -45,7 +54,10 @@ import { bookmarkFor, findDuplicate, useBookmarks } from './bookmarks'
 import { encode, type Encoding } from './encoding'
 import { Workbench, type Doc } from './workbench/Workbench'
 import { diffRange } from './workbench/textDiff'
-import { MenuBar, type MenuDef, type MenuItem } from './components/Menu'
+import { MenuBar, MobileMenu, type MenuDef, type MenuItem } from './components/Menu'
+import { COARSE_QUERY, COMPACT_QUERY, useMediaQuery, useVisualViewport } from './components/touch'
+import { KeyBar } from './components/KeyBar'
+import { NoticeDialog } from './components/NoticeDialog'
 import { SplitView } from './components/SplitView'
 import { EditorPane } from './components/EditorPane'
 import { StatusBar } from './components/StatusBar'
@@ -98,6 +110,18 @@ export default function App() {
   const [sidebarWidth, setSidebarWidth] = useState(250)
   const bookmarks = useBookmarks()
   const [urlDialog, setUrlDialog] = useState<UrlDialogState | null>(null)
+  /** schermo del telefono: un pannello alla volta, barra laterale a cassetto, anteprima sopra l'editor */
+  const compact = useMediaQuery(COMPACT_QUERY)
+  /** dispositivo touch: tastiera virtuale, niente hover né tasto destro */
+  const touch = useMediaQuery(COARSE_QUERY)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [previewHidden, setPreviewHidden] = useState(false)
+  /** sale quando l'app scrive nello spazio dell'app: l'esplora file si rilegge */
+  const [treeVersion, setTreeVersion] = useState(0)
+  const [editorFocused, setEditorFocused] = useState(false)
+  /** limiti noti di questo dispositivo, e quelli mostrati ora nella finestra */
+  const [allNotices, setAllNotices] = useState<Notice[]>([])
+  const [notices, setNotices] = useState<Notice[] | null>(null)
   /** URL con una richiesta in corso (lo stato serve al render, il ref alle funzioni asincrone) */
   const [fetching, setFetching] = useState<ReadonlySet<string>>(new Set())
   const busyUrls = useRef(new Set<string>())
@@ -163,6 +187,8 @@ export default function App() {
 
   /** Apre un file di cui si ha l'handle (recenti, preferiti, esplora file), chiedendo il permesso se serve. */
   async function openHandle(handle: FileSystemFileHandle) {
+    // sul telefono il cassetto copre l'editor: scelto il file, si chiude
+    setDrawerOpen(false)
     try {
       if (!(await ensurePermission(handle, 'read'))) return
       await openFiles([await readHandle(handle)])
@@ -182,6 +208,22 @@ export default function App() {
     }
     wb.patchDoc(doc.id, { encoding: 'utf-8' })
     return encode(text, 'utf-8').bytes
+  }
+
+  /** Nome proposto salvando o esportando: quello del file, o dall'URL, con l'estensione del linguaggio se manca. */
+  function suggestedName(doc: Doc) {
+    const base = doc.request ? fileBaseName(new URL(doc.request.url)) : doc.name
+    return base.includes('.') ? base : `${base}${extensionFor(doc.lang)}`
+  }
+
+  /** Salva con nome nello spazio dell'app; il nome può contenere cartelle ("note/oggi.md"). null se annullato. */
+  async function saveToWorkspace(root: FileSystemDirectoryHandle, suggested: string, data: Uint8Array<ArrayBuffer>) {
+    const input = prompt(`Salva in «${WORKSPACE_LABEL}» con il nome (anche dentro una cartella, come note/${suggested}):`, suggested)
+    if (input === null) return null
+    const overwrite = (name: string) => confirm(`"${name}" esiste già. Sostituirlo?`)
+    const handle = await writeInWorkspace(root, parseWorkspacePath(input), data, overwrite)
+    if (handle) setTreeVersion((v) => v + 1)
+    return handle
   }
 
   async function save(docId = wb.activeDoc?.id, forceSaveAs = false) {
@@ -207,9 +249,9 @@ export default function App() {
       }
       const data = encodeDoc(doc)
       if (!data) return
-      const base = doc.request ? fileBaseName(new URL(doc.request.url)) : doc.name
-      const suggested = base.includes('.') ? base : `${base}${extensionFor(doc.lang)}`
-      const handle = await saveAs(suggested, data)
+      const suggested = suggestedName(doc)
+      // senza accesso al disco, i file si salvano nello spazio dell'app (l'esplora file ne mostra la radice)
+      const handle = hasWorkspace && folder ? await saveToWorkspace(folder, suggested, data) : await saveAs(suggested, data)
       if (handle === null) return // annullato
       if (handle) {
         // una tab URL salvata su disco diventa quel file
@@ -226,6 +268,32 @@ export default function App() {
       }
     } catch (err) {
       flash(`Errore salvataggio: ${(err as Error).message}`)
+    }
+  }
+
+  /** Una copia della tab fuori dall'app: col foglio Condividi sui dispositivi touch, altrimenti un download. */
+  async function exportDoc(docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    const data = doc && encodeDoc(doc)
+    if (!doc || !data) return
+    try {
+      await exportFile(suggestedName(doc), data)
+    } catch (err) {
+      flash(`Errore esportazione: ${(err as Error).message}`)
+    }
+  }
+
+  /** Copia nello spazio dell'app dei file del dispositivo e li apre: da lì si salvano con Ctrl+S. */
+  async function importToWorkspace() {
+    if (!folder) return
+    const files = await pickUploads()
+    if (!files.length) return
+    const handles = await importFiles(folder, files, (f, err) => flash(`Impossibile importare "${f.name}": ${err.message}`))
+    setTreeVersion((v) => v + 1)
+    try {
+      await openFiles(await Promise.all(handles.map((h) => readHandle(h))))
+    } catch (err) {
+      flash(`Errore apertura: ${(err as Error).message}`)
     }
   }
 
@@ -255,7 +323,7 @@ export default function App() {
       for (const { id } of wb.allDocs) {
         const handle = wb.doc(id)?.handle
         if (!handle || wb.doc(id)?.mtime == null) continue
-        if ((await handle.queryPermission({ mode: 'read' }).catch(() => 'denied')) !== 'granted') continue
+        if ((await permissionState(handle, 'read')) !== 'granted') continue
         const onDisk = await diskMtime(handle).catch(() => null)
         // rilette dopo gli await: nel frattempo il documento può essere stato salvato o chiuso
         const doc = wb.doc(id)
@@ -353,6 +421,19 @@ export default function App() {
     }
   }
 
+  /** Testo, URL o file condivisi da un'altra app ("Condividi → Fishpad"). */
+  async function openShared(shared: Shared) {
+    const url = sharedUrl(shared)
+    if (shared.files.length) await openFiles(await Promise.all(shared.files.map((f) => readFile(f))))
+    else if (url) await openUrl({ url })
+    else if (shared.text) {
+      const text = shared.text
+      await replacingBlank(async () => {
+        wb.addDoc({ name: shared.title?.trim() || 'Testo condiviso', content: text, eol: detectEol(text) })
+      })
+    }
+  }
+
   // ---------- preferiti ----------
 
   async function addBookmark(b: Bookmark) {
@@ -373,6 +454,7 @@ export default function App() {
   }
 
   function openBookmark(b: Bookmark) {
+    setDrawerOpen(false)
     if (b.kind === 'url') void openUrl(b.request, b.name)
     else void openHandle(b.handle)
   }
@@ -551,7 +633,7 @@ export default function App() {
     if (folder && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
       const granted = ask
         ? await ensurePermission(folder, 'read').catch(() => false)
-        : (await folder.queryPermission({ mode: 'read' }).catch(() => 'denied')) === 'granted'
+        : (await permissionState(folder, 'read')) === 'granted'
       if (granted) {
         assets = await folderAssets(folder, doc.handle, async (h) => {
           const open = await wb.findByHandle(h)
@@ -562,10 +644,14 @@ export default function App() {
     // il documento potrebbe essere stato chiuso durante gli await
     const current = wb.doc(docId)
     if (!current) return
+    // aperta dall'utente (non un aggiornamento dal vivo): sul telefono torna in primo piano
+    if (ask) setPreviewHidden(false)
     void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
   }
 
   function gotoDocLine(docId: string, line: number) {
+    // sul telefono l'anteprima copre l'editor
+    setPreviewHidden(true)
     if (!showDoc(docId)) {
       flash('Il file eseguito non è più aperto')
       return
@@ -579,11 +665,12 @@ export default function App() {
 
   const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
   const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
-  const toggleSidebar = () => setSettings((s) => ({ ...s, sidebar: !s.sidebar }))
+  // sul telefono la barra laterale è un cassetto che si apre all'occorrenza, e non resta aperta tra una sessione e l'altra
+  const toggleSidebar = () => (compact ? setDrawerOpen((o) => !o) : setSettings((s) => ({ ...s, sidebar: !s.sidebar })))
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const all = { openDialog, save, openFiles, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl }
+  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl }
   const actions = useRef(all)
   useEffect(() => {
     actions.current = all
@@ -594,20 +681,33 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [session, savedSettings, savedRecents, savedFolder] = await Promise.all([
+      const [session, savedSettings, savedRecents, savedFolder, seenNotices] = await Promise.all([
         loadSession(),
         loadSettings(),
         loadRecents(),
         loadFolder(),
+        loadSeenNotices(),
       ])
+      if (cancelled) return
+      // senza accesso alle cartelle del disco l'esplora file mostra sempre lo spazio dell'app
+      const dir = hasWorkspace ? await workspaceRoot() : savedFolder
       if (cancelled) return
       settingsLoaded.current = true
       setSettings(savedSettings)
       setRecents(savedRecents)
-      setFolderState(savedFolder)
+      setFolderState(dir)
+      // alla prima apertura (o quando ne compare uno nuovo) si mostrano i limiti del dispositivo non ancora visti
+      const found = deviceNotices(detectEnv(hasFsAccess, hasWorkspace && !!dir))
+      setAllNotices(found)
+      const unseen = found.filter((n) => !seenNotices.includes(n.id))
+      if (unseen.length) setNotices(unseen)
       wb.setEditorSettings(toEditorSettings(savedSettings, darkQuery.matches))
       if (!session || !wb.restore(session)) wb.newUntitled()
       void actions.current.checkDisk()
+      // "Condividi → Fishpad" da un'altra app: il service worker ha riaperto l'app con i dati
+      void takeShared()
+        .then((shared) => shared && actions.current.openShared(shared))
+        .catch((err) => console.warn('[share]', err))
       // File aperti dal sistema operativo ("Apri con…") nella PWA installata
       window.launchQueue?.setConsumer(async (params) => {
         const handles = params.files.filter((h): h is FileSystemFileHandle => h.kind === 'file')
@@ -720,6 +820,28 @@ export default function App() {
     }
   }, [wb, runner, folder])
 
+  // Dispositivi touch: l'app sta sopra la tastiera virtuale, e mostrare una tab non apre la tastiera
+  useVisualViewport(touch)
+  useEffect(() => wb.setAutoFocus(!touch), [wb, touch])
+
+  // Editor col focus: sui dispositivi touch compare la barra dei tasti aggiuntivi
+  useEffect(() => {
+    if (!touch) return
+    let frame = 0
+    // durante focusout activeElement non è ancora quello nuovo: si guarda al frame successivo
+    const update = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => setEditorFocused(!!document.activeElement?.closest('.cm-content')))
+    }
+    document.addEventListener('focusin', update)
+    document.addEventListener('focusout', update)
+    return () => {
+      cancelAnimationFrame(frame)
+      document.removeEventListener('focusin', update)
+      document.removeEventListener('focusout', update)
+    }
+  }, [touch])
+
   // Tema di sistema
   useEffect(() => {
     const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches)
@@ -772,6 +894,7 @@ export default function App() {
         { label: 'Apri…', shortcut: 'Ctrl+O', action: () => void openDialog() },
         { label: 'Apri URL…', action: () => setUrlDialog({ mode: 'open' }) },
         ...(hasFolderAccess ? [{ label: 'Apri cartella…', action: () => void openFolder() }] : []),
+        ...(hasWorkspace && folder ? [{ label: `Importa in «${WORKSPACE_LABEL}»…`, action: () => void importToWorkspace() }] : []),
         {
           label: 'Apri recente',
           submenu: hasFsAccess
@@ -796,6 +919,8 @@ export default function App() {
         { label: 'Salva', shortcut: 'Ctrl+S', disabled: !active, action: () => void save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Shift+S', disabled: !active, action: () => void save(undefined, true) },
         { label: 'Salva tutto', disabled: !anyDirty, action: () => void saveAll() },
+        // con l'accesso al disco ci pensa Salva con nome
+        ...(hasFsAccess ? [] : [{ label: 'Esporta / condividi…', disabled: !active, action: () => void exportDoc() }]),
         active?.request
           ? { label: "Ricarica dall'URL", shortcut: 'F5', action: () => void refreshUrl() }
           : { label: 'Ricarica dal disco', disabled: !active?.handle, action: () => void reload() },
@@ -829,10 +954,11 @@ export default function App() {
       items: [
         { label: 'Palette dei comandi…', shortcut: 'Ctrl+Shift+P', action: () => setPalette('commands') },
         { label: 'Vai a una tab…', shortcut: 'Ctrl+P', action: () => setPalette('tabs') },
-        { label: 'Barra laterale', shortcut: 'Ctrl+B', checked: settings.sidebar, action: toggleSidebar },
+        { label: 'Barra laterale', shortcut: 'Ctrl+B', checked: compact ? drawerOpen : settings.sidebar, action: toggleSidebar },
         'separator',
-        { label: 'Dividi a destra', shortcut: 'Ctrl+\\', action: () => void wb.split('row') },
-        { label: 'Dividi in basso', action: () => void wb.split('column') },
+        // sullo schermo del telefono si vede un pannello alla volta
+        { label: 'Dividi a destra', shortcut: 'Ctrl+\\', disabled: compact, action: () => void wb.split('row') },
+        { label: 'Dividi in basso', disabled: compact, action: () => void wb.split('column') },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
         'separator',
         {
@@ -899,6 +1025,7 @@ export default function App() {
       items: [
         { heading: `Fishpad Edit v${__APP_VERSION__}` },
         { label: 'Scorciatoie da tastiera', action: () => setHelp('shortcuts') },
+        { label: 'Limiti su questo dispositivo', disabled: !allNotices.length, action: () => setNotices(allNotices) },
         { label: 'Novità delle versioni', action: () => setHelp('changelog') },
         'separator',
         { label: 'Codice sorgente su GitHub', action: () => window.open(REPO_URL, '_blank', 'noopener') },
@@ -930,6 +1057,35 @@ export default function App() {
     'separator',
   ]
 
+  /** Passa al pannello successivo (sul telefono se ne vede uno alla volta). */
+  function nextPane() {
+    const ids = [...snap.panes.keys()]
+    wb.focusPane(ids[(ids.indexOf(snap.activePaneId) + 1) % ids.length])
+  }
+
+  function renderPane(paneId: string) {
+    const pane = snap.panes.get(paneId)
+    return pane ? (
+      <EditorPane
+        key={paneId}
+        wb={wb}
+        pane={pane}
+        docs={snap.docs}
+        active={multiPane && paneId === snap.activePaneId}
+        multiPane={multiPane}
+        tabMenuExtra={tabMenuExtra}
+        compact={compact ? { onNextPane: multiPane ? nextPane : undefined } : undefined}
+      />
+    ) : null
+  }
+
+  async function closeNotices() {
+    const shown = notices ?? []
+    setNotices(null)
+    const seen = await loadSeenNotices()
+    await saveSeenNotices([...new Set([...seen, ...shown.map((n) => n.id)])])
+  }
+
   const closeOverlay = () => {
     setUrlDialog(null)
     setPalette(null)
@@ -940,19 +1096,39 @@ export default function App() {
   return (
     <div className={`app${dragging ? ' dragging' : ''}`}>
       <header className="titlebar">
+        {compact && <MobileMenu menus={menus} />}
         <span className="brand">
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" width={16} height={16} />
-          Fishpad Edit
-          <span className="version">v{__APP_VERSION__}</span>
+          {compact ? 'Fishpad' : 'Fishpad Edit'}
+          {!compact && <span className="version">v{__APP_VERSION__}</span>}
         </span>
-        <MenuBar menus={menus} />
+        {!compact && <MenuBar menus={menus} />}
         <div className="spacer" />
-        <span className="font-size" title="Dimensione del testo">{settings.fontSize}px</span>
+        {compact ? (
+          <>
+            {runState.preview && previewHidden && (
+              <button className="title-action" onClick={() => setPreviewHidden(false)} title="Mostra l'anteprima">Anteprima</button>
+            )}
+            {canRun && (
+              <button className="title-action" onClick={() => void runActive()} title={activeTarget === 'preview' ? 'Anteprima del file' : 'Esegui file o selezione'} aria-label="Esegui">
+                ▶
+              </button>
+            )}
+            <button className="title-action" onClick={toggleSidebar} title="Preferiti ed esplora file" aria-label="Preferiti ed esplora file" aria-expanded={drawerOpen}>
+              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+                <line x1="6" y1="2.5" x2="6" y2="13.5" stroke="currentColor" />
+              </svg>
+            </button>
+          </>
+        ) : (
+          <span className="font-size" title="Dimensione del testo">{settings.fontSize}px</span>
+        )}
       </header>
 
       <main className="workspace">
-        {settings.sidebar && (
-          <Sidebar width={sidebarWidth} onResize={setSidebarWidth}>
+        {(compact ? drawerOpen : settings.sidebar) && (
+          <Sidebar width={sidebarWidth} onResize={setSidebarWidth} drawer={compact ? { onClose: () => setDrawerOpen(false) } : undefined}>
             <BookmarkList
               list={bookmarks.list}
               canAdd={!!(active?.handle || active?.request)}
@@ -967,11 +1143,13 @@ export default function App() {
               <FileTree
                 key={folderKey}
                 root={folder}
+                workspace={hasWorkspace ? { label: WORKSPACE_LABEL } : undefined}
+                version={treeVersion}
                 activePath={activePath}
                 onOpen={(h) => void openHandle(h)}
                 onBookmark={(handle) => void addBookmark({ id: crypto.randomUUID(), name: handle.name, kind: 'file', handle })}
                 onRename={renameInFolder}
-                onCloseFolder={() => setFolder(null)}
+                onCloseFolder={hasWorkspace ? undefined : () => setFolder(null)}
                 onMessage={flash}
               />
             ) : (
@@ -979,24 +1157,11 @@ export default function App() {
             )}
           </Sidebar>
         )}
-        <SplitView
-          layout={snap.layout}
-          onResize={(path, sizes) => wb.resize(path, sizes)}
-          renderPane={(paneId) => {
-            const pane = snap.panes.get(paneId)
-            return pane ? (
-              <EditorPane
-                key={paneId}
-                wb={wb}
-                pane={pane}
-                docs={snap.docs}
-                active={multiPane && paneId === snap.activePaneId}
-                multiPane={multiPane}
-                tabMenuExtra={tabMenuExtra}
-              />
-            ) : null
-          }}
-        />
+        {compact ? (
+          renderPane(snap.activePaneId)
+        ) : (
+          <SplitView layout={snap.layout} onResize={(path, sizes) => wb.resize(path, sizes)} renderPane={renderPane} />
+        )}
         <PreviewPanel
           runner={runner}
           docName={runState.preview ? snap.docs.get(runState.preview.docId)?.name : undefined}
@@ -1005,6 +1170,7 @@ export default function App() {
           onResize={setPreviewWidth}
           onReload={() => runState.preview && runPreview(runState.preview.docId)}
           onToggleConsole={() => setConsoleOpen((o) => !o)}
+          overlay={compact ? { hidden: previewHidden, onHide: () => setPreviewHidden(true) } : undefined}
         />
       </main>
 
@@ -1022,6 +1188,8 @@ export default function App() {
           onGoto={gotoDocLine}
         />
       )}
+
+      {touch && editorFocused && <KeyBar view={() => wb.activeView} canRun={canRun} onRun={() => void runActive()} />}
 
       <StatusBar
         doc={active}
@@ -1051,6 +1219,7 @@ export default function App() {
         />
       )}
       {help && <HelpDialog view={help} onView={setHelp} onClose={closeOverlay} />}
+      {notices && <NoticeDialog notices={notices} onClose={closeNotices} />}
       {urlDialog && (
         <UrlDialog
           mode={urlDialog.mode}

@@ -1,8 +1,8 @@
 # Fishpad Edit
 
-Editor di testo per desktop nel browser, con syntax highlight e folding del codice. Legge e scrive i file locali direttamente, funziona offline e si installa come app (PWA).
+Editor di testo nel browser, con syntax highlight e folding del codice. Legge e scrive i file locali direttamente, funziona offline e si installa come app (PWA), anche su telefono e tablet.
 
-È pensato per Chromium (Chrome, Edge). Su Firefox e Safari funziona in modalità ridotta: i file si aprono con un upload e si salvano con un download.
+Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare direttamente sui file del disco. Dove il browser non lo permette (telefoni e tablet, Safari, Firefox) i file si salvano nella cartella privata dell'app ("File dell'app"), con import ed esportazione verso il dispositivo: vedi [Telefono e tablet](#telefono-e-tablet).
 
 ## Funzionalità (MVP)
 
@@ -19,6 +19,7 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 - **Tab URL**: File → Apri URL esegue una richiesta GET, con header facoltativi, e apre la risposta in una tab. Il linguaggio viene dal `Content-Type`; il JSON è formattato con Prettier, che non arrotonda i numeri grandi. La barra di stato mostra codice HTTP e tempo; `F5` (o un clic lì) ripete la richiesta. Il server deve consentire le richieste dall'app (CORS); da una pagina `https` non si possono chiamare indirizzi `http`, tranne localhost. Salvata su disco, la tab diventa un file normale.
 - **Preferiti**: URL e file da riaprire con un clic, nella barra laterale e nel menu Preferiti. Si aggiungono con ☆ (tab attiva), dal menu della tab, dall'esplora file o spuntando "Aggiungi ai preferiti" in Apri URL. Gli header vengono salvati in chiaro nel browser.
 - **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.
+- **Telefono e tablet**: disposizione per schermi stretti, file salvati nella cartella dell'app, barra dei tasti sopra la tastiera, Condividi → Fishpad su Android. Dettagli e limiti nella [sezione dedicata](#telefono-e-tablet).
 - **Drag & drop di file** sulla finestra. Su Chromium il file resta collegato a quello su disco.
 - **Syntax highlight per circa 140 linguaggi** (`@codemirror/language-data`, caricati solo quando servono). Il linguaggio si riconosce dal nome del file; per il testo incollato in una tab senza nome lo riconosce dal contenuto, con euristiche a punteggio per JavaScript, TypeScript, JSX, TSX, CSS, HTML e JSON. Mentre scrivi può passare a un linguaggio più specifico (per esempio da JS a TSX quando aggiungi i tipi), finché non lo scegli tu a mano.
 - **Folding**:
@@ -38,6 +39,37 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
 - **Tema** chiaro, scuro o di sistema; dimensione del font; a capo automatico
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), codifica UTF-8 o Windows-1252. La codifica viene rilevata in apertura: se il file non è UTF-8 valido viene letto come Windows-1252, e il BOM UTF-8 viene rimosso. Il file si salva nella stessa codifica, e dalla barra di stato si può cambiare quella di salvataggio o riaprire il file con un'altra.
+
+## Telefono e tablet
+
+Sotto i 700 px di larghezza l'interfaccia passa alla disposizione per telefono:
+
+- il menu sta dietro **☰**; i sottomenu si aprono uno alla volta, e "‹" torna indietro
+- preferiti ed esplora file stanno in un **cassetto**, aperto dal pulsante in alto a destra; si chiude toccando fuori o aprendo un file
+- si vede **un pannello alla volta**: se la sessione (magari ripresa dal desktop) ne ha più di uno, ⇄ passa al successivo; dividere non è disponibile
+- l'**anteprima** copre l'editor: "‹ Editor" torna al codice lasciandola aperta, "Anteprima" in alto la riporta davanti; **▶** in alto esegue il file
+
+Sui dispositivi touch, a qualunque larghezza:
+
+- la **pressione prolungata** su tab, file, cartelle e preferiti apre il menu del tasto destro (Safari su iOS non lo genera da solo)
+- mentre si scrive compare una **barra dei tasti** sopra la tastiera: Tab (con Emmet), Esc, annulla e ripeti, frecce, parentesi e simboli, Cerca ed Esegui
+- l'app resta nella parte visibile sopra la tastiera virtuale (`visualViewport`; su Android anche `interactive-widget=resizes-content`)
+
+**File dell'app.** Nessun browser per telefono dà accesso alle cartelle del dispositivo, quindi lì (e in Safari e Firefox su desktop) l'esplora file mostra una cartella privata dell'app (Origin Private File System):
+
+- `Ctrl+S` o File → Salva su una tab nuova chiede un nome, anche con sottocartelle ("note/oggi.md"); da lì in poi salva sullo stesso file
+- File → Importa, o ⇩ nell'esplora file, copia dentro i file del dispositivo; Esporta / condividi ne porta fuori una copia, col foglio Condividi sui dispositivi touch (File, Drive, un'altra app) e con un download altrove
+- i file si creano, rinominano ed eliminano come in una cartella del disco, e l'anteprima HTML carica da lì CSS, script e immagini
+- dove `createWritable` manca (Safari meno recenti) si scrive da un Web Worker con `createSyncAccessHandle`; dove gli handle non si possono salvare in IndexedDB, sessione e preferiti ricordano il percorso del file
+
+**Condividi → Fishpad** (Android, app installata): `share_target` nel manifest e un gestore nel service worker (`public/share-target-sw.js`). Un file di testo si apre in una tab, un link come tab URL, un testo in una tab nuova.
+
+**Limiti.** Alla prima apertura una finestra mostra quelli che valgono per il browser in uso, solo se non li si è già visti (`src/notices.ts`); si riapre da Aiuto → Limiti su questo dispositivo.
+
+- I file restano dentro l'app: per lavorare su un file del telefono va importato, e per usarlo altrove va esportato. Non si salva sul file originale, e le modifiche fatte da altre app non arrivano.
+- Lo spazio dell'app vive nei dati del sito: cancellandoli, o disinstallando la PWA, i file si perdono. L'app chiede al browser di non eliminarli (`navigator.storage.persist()`), ma Safari può cancellare i dati dei siti non usati per qualche settimana se l'app non è aggiunta alla schermata Home. Conviene esportare i file importanti.
+- "Apri con…", file recenti e drag & drop dal sistema esistono solo su desktop; Condividi → Fishpad solo su Android.
+- Le scorciatoie con `Ctrl` e `Alt` servono solo con una tastiera fisica; senza, si passa dal menu o dalla barra dei tasti.
 
 ## Scorciatoie
 
@@ -85,7 +117,8 @@ src/
   workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
   workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
   components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel, CommandPalette, HelpDialog,
-                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL)
+                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL), KeyBar (tasti sopra la tastiera)
+  components/touch.ts  schermo stretto e touch: media query, pressione prolungata, viewport sopra la tastiera virtuale
   components/commands.ts voci dei menu come comandi e ricerca approssimata della palette (+ commands.test.ts)
   shortcuts.ts         elenco delle scorciatoie mostrato in Aiuto
   runner/Runner.ts     esecuzione del codice e raccolta dell'output della console
@@ -95,7 +128,11 @@ src/
   runner/folderAssets.ts lettura di quei file dalla cartella aperta o dall'editor
   runner/react-vendor.ts React per l'anteprima, con un require minimale
   runner/sandbox.ts    sorgenti di iframe e worker: console, formattazione dei valori, mappatura degli errori
-  fs.ts                File System Access API e fallback upload/download
+  fs.ts                File System Access API, fallback upload/download, esportazione col foglio Condividi
+  workspace.ts         "File dell'app" (OPFS) dove manca l'accesso alle cartelle: salvataggio, import, handle salvabili (+ workspace.test.ts)
+  opfsWrite.ts         scrittura via Web Worker (createSyncAccessHandle) dove manca createWritable
+  notices.ts           limiti noti del dispositivo, mostrati alla prima apertura (+ notices.test.ts)
+  share.ts             Condividi → Fishpad: dati ricevuti dal service worker (+ share.test.ts; il gestore è public/share-target-sw.js)
   explorer.ts          lettura della cartella, crea / rinomina / elimina (+ explorer.test.ts)
   remote.ts            tab URL: richiesta GET, header, messaggi d'errore, linguaggio della risposta (+ remote.test.ts)
   bookmarks.ts         preferiti: lista salvata in IndexedDB (+ bookmarks.test.ts)

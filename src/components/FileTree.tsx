@@ -1,17 +1,23 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { ensurePermission } from '../fs'
+import { ensurePermission, exportFile, permissionState, pickUploads } from '../fs'
 import { createFile, createFolder, deleteEntry, listDir, parentPath, type TreeEntry } from '../explorer'
+import { importFiles } from '../workspace'
 import { ContextMenu, type MenuItem } from './Menu'
+import { longPress } from './touch'
 
 interface Props {
   root: FileSystemDirectoryHandle
+  /** spazio dell'app al posto di una cartella del disco: nome da mostrare, e si importa e si esporta */
+  workspace?: { label: string }
+  /** cambia quando l'app ha scritto nella cartella (salvataggio, import): l'albero si rilegge */
+  version?: number
   /** percorso del file della tab attiva, se sta nella cartella: viene evidenziato */
   activePath: string | null
   onOpen: (handle: FileSystemFileHandle) => void
   onBookmark: (handle: FileSystemFileHandle) => void
   /** rinomina la voce aggiornando le tab aperte che ne dipendono */
   onRename: (parent: FileSystemDirectoryHandle, entry: TreeEntry, newName: string) => Promise<void>
-  onCloseFolder: () => void
+  onCloseFolder?: () => void
   onMessage: (msg: string) => void
 }
 
@@ -24,7 +30,7 @@ const errorText = (err: unknown) => (err as Error).message || String(err)
  * Esplora file: albero della cartella aperta, letto un livello alla volta quando si apre una cartella
  * (così anche node_modules non costa nulla finché resta chiusa). Si aggiorna tornando all'app.
  */
-export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onCloseFolder, onMessage }: Props) {
+export function FileTree({ root, workspace, version, activePath, onOpen, onBookmark, onRename, onCloseFolder, onMessage }: Props) {
   const [granted, setGranted] = useState<boolean | null>(null)
   const [listings, setListings] = useState<ReadonlyMap<string, Listing>>(new Map())
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
@@ -61,10 +67,7 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
 
   useEffect(() => {
     let cancelled = false
-    root
-      .queryPermission({ mode: 'readwrite' })
-      .then((state) => !cancelled && setGranted(state === 'granted'))
-      .catch(() => !cancelled && setGranted(false))
+    void permissionState(root, 'readwrite').then((state) => !cancelled && setGranted(state === 'granted'))
     return () => {
       cancelled = true
     }
@@ -75,7 +78,7 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
     refresh()
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
-  }, [granted, refresh])
+  }, [granted, refresh, version])
 
   async function reconnect() {
     setGranted(await ensurePermission(root, 'readwrite').catch(() => false))
@@ -143,6 +146,26 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
     }
   }
 
+  /** Copia nella cartella dei file scelti dal dispositivo. */
+  async function importHere(dirPath: string) {
+    const dir = dirs.current.get(dirPath)
+    const files = await pickUploads()
+    if (!dir || !files.length) return
+    const done = await importFiles(dir, files, (f, err) => onMessage(`Impossibile importare "${f.name}": ${errorText(err)}`))
+    if (dirPath) setExpanded((s) => new Set(s).add(dirPath))
+    await load(dirPath)
+    if (done.length) onMessage(done.length === 1 ? `Importato: ${done[0].name}` : `Importati ${done.length} file`)
+  }
+
+  async function exportEntry(handle: FileSystemFileHandle) {
+    try {
+      const file = await handle.getFile()
+      await exportFile(file.name, new Uint8Array(await file.arrayBuffer()))
+    } catch (err) {
+      onMessage(`Impossibile esportare "${handle.name}": ${errorText(err)}`)
+    }
+  }
+
   async function copyPath(path: string) {
     try {
       await navigator.clipboard.writeText(path)
@@ -162,6 +185,7 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
     const newItems = (dirPath: string): MenuItem[] => [
       { label: 'Nuovo file…', action: () => void create(dirPath, 'file') },
       { label: 'Nuova cartella…', action: () => void create(dirPath, 'directory') },
+      ...(workspace ? [{ label: 'Importa file qui…', action: () => void importHere(dirPath) }] : []),
     ]
     if (!entry) return [...newItems(''), 'separator', { label: 'Aggiorna', action: refresh }]
     const handle = entry.handle
@@ -175,6 +199,7 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
     return [
       { label: 'Apri', action: () => onOpen(handle) },
       { label: 'Aggiungi ai preferiti', action: () => onBookmark(handle) },
+      ...(workspace ? [{ label: 'Esporta / condividi…', action: () => void exportEntry(handle) }] : []),
       'separator',
       ...common,
     ]
@@ -200,6 +225,7 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
             title={entry.path}
             onClick={() => (isDir ? toggle(entry.path) : onOpen(entry.handle as FileSystemFileHandle))}
             onContextMenu={(e) => openMenu(e, entry)}
+            {...longPress((x, y) => setMenu({ x, y, entry }))}
           >
             <span className="tree-twisty">{isDir ? (open ? '▾' : '▸') : ''}</span>
             <span className="tree-name">{entry.name}</span>
@@ -210,20 +236,26 @@ export function FileTree({ root, activePath, onOpen, onBookmark, onRename, onClo
     })
   }
 
+  const title = workspace?.label ?? root.name
   return (
     <section className="side-section tree-section">
-      <header className="side-header" title={root.name}>
-        <span className="panel-title">{root.name}</span>
+      <header className="side-header" title={title}>
+        <span className="panel-title">{title}</span>
         <div className="spacer" />
         {granted && (
           <>
+            {workspace && (
+              <button onClick={() => void importHere('')} title="Importa file dal dispositivo" aria-label="Importa file">⇩</button>
+            )}
             <button onClick={() => void create('', 'file')} title="Nuovo file nella cartella" aria-label="Nuovo file">+</button>
             <button onClick={refresh} title="Aggiorna" aria-label="Aggiorna">↻</button>
           </>
         )}
-        <button onClick={onCloseFolder} title="Chiudi la cartella" aria-label="Chiudi la cartella">×</button>
+        {onCloseFolder && (
+          <button onClick={onCloseFolder} title="Chiudi la cartella" aria-label="Chiudi la cartella">×</button>
+        )}
       </header>
-      <div className="tree" role="tree" onContextMenu={(e) => granted && openMenu(e, null)}>
+      <div className="tree" role="tree" onContextMenu={(e) => granted && openMenu(e, null)} {...longPress((x, y) => granted && setMenu({ x, y, entry: null }))}>
         {granted === false ? (
           <div className="side-empty">
             <p>Dopo un riavvio il browser chiede di nuovo il permesso di accedere alla cartella.</p>

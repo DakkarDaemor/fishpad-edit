@@ -21,7 +21,12 @@ export interface MenuDef {
 // mousedown senza preventDefault sposterebbe il focus dall'editor: i comandi (Annulla, Cerca…) devono agire su di lui
 const keepFocus = (e: ReactMouseEvent) => e.preventDefault()
 
-function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) {
+/**
+ * Voci di un menu. I sottomenu si aprono passandoci sopra o con un clic (al tocco non c'è hover);
+ * con `onEnter` invece il clic su un sottomenu lo passa al chiamante, che lo mostra al posto della lista.
+ */
+function MenuList({ items, onDone, onEnter }: { items: MenuItem[]; onDone: () => void; onEnter?: (item: MenuAction) => void }) {
+  const [openSub, setOpenSub] = useState<number | null>(null)
   return (
     <ul className="menu-list" role="menu">
       {items.map((item, i) => {
@@ -29,14 +34,19 @@ function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) 
         if ('heading' in item) return <li key={i} className="menu-heading">{item.heading}</li>
         const hasSub = !!item.submenu
         return (
-          <li key={i} className={`menu-entry${hasSub ? ' has-sub' : ''}`} role="none">
+          <li key={i} className={`menu-entry${hasSub ? ' has-sub' : ''}${openSub === i ? ' sub-open' : ''}`} role="none">
             <button
               role="menuitem"
               className={item.danger ? 'danger' : undefined}
               disabled={item.disabled || (hasSub && item.submenu!.length === 0)}
               onMouseDown={keepFocus}
               onClick={() => {
-                if (hasSub || !item.action) return
+                if (hasSub) {
+                  if (onEnter) onEnter(item)
+                  else setOpenSub(openSub === i ? null : i)
+                  return
+                }
+                if (!item.action) return
                 onDone()
                 item.action()
               }}
@@ -48,7 +58,7 @@ function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) 
               </span>
               <span className="menu-shortcut">{hasSub ? '▸' : item.shortcut}</span>
             </button>
-            {hasSub && item.submenu!.length > 0 && (
+            {hasSub && !onEnter && item.submenu!.length > 0 && (
               <div className="submenu">
                 <MenuList items={item.submenu!} onDone={onDone} />
               </div>
@@ -60,18 +70,21 @@ function MenuList({ items, onDone }: { items: MenuItem[]; onDone: () => void }) 
   )
 }
 
-/** Chiude al clic fuori dal contenitore o con Esc. */
+/**
+ * Chiude al clic fuori dal contenitore o con Esc. Ascolta `pointerdown` e non `mousedown`: dopo una pressione
+ * prolungata il browser genera un mousedown che chiuderebbe subito il menu appena aperto.
+ */
 function useDismiss(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && close()
+    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && close()
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close()
-    document.addEventListener('mousedown', onDown)
+    document.addEventListener('pointerdown', onDown)
     document.addEventListener('keydown', onKey)
     window.addEventListener('blur', close)
     return () => {
-      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('pointerdown', onDown)
       document.removeEventListener('keydown', onKey)
       window.removeEventListener('blur', close)
     }
@@ -105,6 +118,53 @@ export function MenuBar({ menus }: { menus: MenuDef[] }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Voci del sottomenu raggiunto seguendo le etichette di `path`. */
+function itemsAt(menus: MenuDef[], path: string[]): MenuItem[] | null {
+  let items: MenuItem[] = menus.map((m) => ({ label: m.label, submenu: m.items }))
+  for (const label of path) {
+    const found = items.find((i): i is MenuAction => typeof i === 'object' && 'label' in i && i.label === label && !!i.submenu)
+    if (!found) return null
+    items = found.submenu!
+  }
+  return items
+}
+
+/**
+ * Menu per lo schermo del telefono: un pulsante ☰ apre un pannello a tutta larghezza, e i sottomenu
+ * (File, Modifica… e i loro) prendono il posto della lista, con "‹" per tornare indietro.
+ */
+export function MobileMenu({ menus }: { menus: MenuDef[] }) {
+  // percorso per etichette: le voci si rileggono a ogni render, con lo stato aggiornato (spunte, voci disattivate)
+  const [path, setPath] = useState<string[] | null>(null)
+  const close = useCallback(() => setPath(null), [])
+  const ref = useDismiss(path !== null, close)
+  const items = path && itemsAt(menus, path)
+  return (
+    <div className={`menubar-item${path ? ' open' : ''}`} ref={ref}>
+      <button
+        className="menu-toggle"
+        aria-label="Menu"
+        aria-haspopup="menu"
+        aria-expanded={!!path}
+        onMouseDown={keepFocus}
+        onClick={() => setPath(path ? null : [])}
+      >
+        ☰
+      </button>
+      {path && items && (
+        <div className="menu-panel mobile-menu">
+          {path.length > 0 && (
+            <button className="menu-back" onMouseDown={keepFocus} onClick={() => setPath(path.slice(0, -1))}>
+              ‹ {path[path.length - 1]}
+            </button>
+          )}
+          <MenuList key={path.join('/')} items={items} onDone={close} onEnter={(item) => setPath([...path, item.label])} />
+        </div>
+      )}
     </div>
   )
 }

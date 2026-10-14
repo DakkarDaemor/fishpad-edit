@@ -4,6 +4,8 @@ export const SHORTCUTS: Array<[string, string]> = [
   ['Vai a una tab aperta', 'Ctrl+P'],
   ['Nuova tab', 'Ctrl+N (nella PWA) / Alt+N'],
   ['Apri', 'Ctrl+O'],
+  ['Barra laterale (preferiti ed esplora file)', 'Ctrl+B'],
+  ['Ripeti la richiesta della tab URL', 'F5'],
   ['Salva / Salva con nome', 'Ctrl+S / Ctrl+Shift+S'],
   ['Chiudi tab', 'Ctrl+W (nella PWA) / Alt+W'],
   ['Dividi a destra (stesso file, scroll separato)', 'Ctrl+\\'],

@@ -268,3 +268,53 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .changelog ul { padding-left: 20px; margin: 0; }
 .changelog li { margin: 3px 0; }
 .changelog code { font: 12px var(--font-mono); padding: 0 4px; border-radius: 3px; background: var(--bg-hover); }
+
+/* Barra laterale: preferiti ed esplora file */
+.sidebar { display: flex; flex-direction: column; flex-shrink: 0; min-width: 0; background: var(--bg-chrome); user-select: none; }
+.sidebar-gutter { cursor: col-resize; }
+.side-section { display: flex; flex-direction: column; min-height: 0; }
+.bookmarks-section { flex: 0 1 auto; max-height: 40%; border-bottom: 1px solid var(--border); }
+.tree-section { flex: 1; }
+.side-header { display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; min-height: 28px; flex-shrink: 0; }
+.side-header .panel-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-header button { padding: 0 6px; font-size: 13px; color: var(--fg-muted); }
+.side-header button:hover { color: var(--fg); }
+.side-header button:disabled { opacity: 0.4; cursor: default; background: transparent; }
+.side-list, .tree { flex: 1; min-height: 0; overflow: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.side-empty { margin: 0; padding: 6px 12px 10px; color: var(--fg-muted); font-size: 12px; }
+.side-empty p { margin: 0 0 8px; }
+.tree-row {
+  display: flex; align-items: center; gap: 4px; width: 100%; padding: 2px 8px; border-radius: 0;
+  text-align: left; white-space: nowrap; color: var(--fg);
+}
+.tree-row.current { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.tree-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.tree-twisty { flex: 0 0 12px; color: var(--fg-muted); font-size: 11px; }
+.tree-name { overflow: hidden; text-overflow: ellipsis; }
+.tree-note { padding: 2px 8px; color: var(--fg-muted); font-size: 12px; font-style: italic; }
+.tree-note.error { color: var(--danger); font-style: normal; white-space: normal; }
+.bookmark { padding-left: 10px; }
+.bookmark-kind {
+  flex-shrink: 0; padding: 0 4px; border-radius: 3px; font: 10px/16px var(--font-mono);
+  color: var(--fg-muted); border: 1px solid var(--border);
+}
+.bookmark-kind.url { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.bookmark-detail { flex: 1; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; color: var(--fg-muted); font-size: 11px; }
+
+/* Pulsanti principali e moduli (finestra Apri URL) */
+button.primary { background: var(--accent); color: var(--bg-editor); }
+button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--fg)); }
+.url-dialog { width: min(560px, 100%); }
+.form { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-muted); }
+.form label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
+.form input:not([type='checkbox']), .form textarea {
+  padding: 5px 8px; font: 13px var(--font-mono); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 4px; outline: none; resize: vertical;
+}
+.form input:focus, .form textarea:focus { border-color: var(--accent); }
+.form small { font-size: 11px; }
+.form-error { margin: 0; color: var(--danger); }
+.form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.form-actions button { padding: 4px 14px; border-color: var(--border); }
+.form-actions button.primary { border-color: transparent; }

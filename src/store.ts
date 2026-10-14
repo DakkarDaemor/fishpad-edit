@@ -3,6 +3,7 @@ import type { Encoding } from './encoding'
 import type { Indent } from './editor/indentation'
 import type { Layout } from './workbench/layout'
 import type { TabColor } from './workbench/tabColors'
+import type { UrlRequest, UrlResponse } from './remote'
 
 export type Eol = 'LF' | 'CRLF'
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -11,9 +12,11 @@ export interface Settings {
   theme: ThemeMode
   fontSize: number
   wrap: boolean
+  /** barra laterale con preferiti ed esplora file */
+  sidebar: boolean
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system', fontSize: 14, wrap: false }
+export const DEFAULT_SETTINGS: Settings = { theme: 'system', fontSize: 14, wrap: false, sidebar: false }
 
 export interface SavedDoc {
   id: string
@@ -30,6 +33,9 @@ export interface SavedDoc {
   handle?: FileSystemFileHandle
   mtime?: number
   color?: TabColor
+  /** tab collegata a un URL: la richiesta per ricaricarla e l'esito dell'ultima */
+  request?: UrlRequest
+  response?: UrlResponse
 }
 
 /** Un documento aperto in un pannello: cursore e blocchi chiusi sono per pannello. */
@@ -83,7 +89,9 @@ export interface RecentFile {
 const KEY_SESSION = 'session'
 const KEY_SETTINGS = 'settings'
 const KEY_RECENTS = 'recents'
+// chiave storica: prima della 6.0 era la cartella dell'anteprima, ora è quella dell'esplora file
 const KEY_FOLDER = 'previewFolder'
+const KEY_BOOKMARKS = 'bookmarks'
 const MAX_RECENTS = 12
 
 // IndexedDB può non essere disponibile (navigazione privata, storage bloccato): non deve rompere l'app.
@@ -116,7 +124,7 @@ export async function addRecent(handle: FileSystemFileHandle): Promise<RecentFil
   return next
 }
 
-/** Cartella da cui l'anteprima HTML carica i file locali (CSS, script, immagini). */
+/** Cartella aperta nell'esplora file; l'anteprima HTML carica da lì i file locali (CSS, script, immagini). */
 export const loadFolder = () => safe(async () => (await get<FileSystemDirectoryHandle>(KEY_FOLDER)) ?? null, null)
 export const saveFolder = (dir: FileSystemDirectoryHandle | null) =>
   safe(() => (dir ? set(KEY_FOLDER, dir) : del(KEY_FOLDER)), undefined)
@@ -125,3 +133,12 @@ export async function clearRecents(): Promise<RecentFile[]> {
   await safe(() => del(KEY_RECENTS), undefined)
   return []
 }
+
+/** Preferito: un URL (con i suoi header) o un file su disco, da riaprire in una tab. */
+export type Bookmark = { id: string; name: string } & (
+  | { kind: 'url'; request: UrlRequest }
+  | { kind: 'file'; handle: FileSystemFileHandle }
+)
+
+export const loadBookmarks = () => safe(async () => (await get<Bookmark[]>(KEY_BOOKMARKS)) ?? [], [] as Bookmark[])
+export const saveBookmarks = (list: Bookmark[]) => safe(() => set(KEY_BOOKMARKS, list), undefined)

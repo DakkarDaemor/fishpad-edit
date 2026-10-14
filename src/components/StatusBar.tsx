@@ -17,12 +17,16 @@ interface Props {
   onEncoding: (encoding: Encoding) => void
   /** rilegge il file da disco con la codifica indicata */
   onReopen: (encoding: Encoding) => void
+  /** è in corso la richiesta della tab URL attiva */
+  fetching: boolean
+  /** rifà la richiesta della tab URL attiva */
+  onRefreshUrl: () => void
 }
 
 const ENCODINGS = Object.keys(ENCODING_LABELS) as Encoding[]
 
 export function StatusBar(props: Props) {
-  const { doc, status, onLanguage, onIndent, onRedetectIndent, onConvertIndent, onToggleEol, onEncoding, onReopen } = props
+  const { doc, status, onLanguage, onIndent, onRedetectIndent, onConvertIndent, onToggleEol, onEncoding, onReopen, fetching, onRefreshUrl } = props
   const indentItems = (d: Doc): MenuItem[] => [
     { heading: 'Usa per questo file' },
     ...[false, true].flatMap((tabs) =>
@@ -58,6 +62,21 @@ export function StatusBar(props: Props) {
         {status.sel > 0 && ` (${status.sel} selezionati)`}
       </span>
       <span>{status.lines} righe</span>
+      {doc?.request && (
+        <button
+          className={!fetching && (doc.response?.status ?? 0) >= 400 ? 'warn' : undefined}
+          onClick={onRefreshUrl}
+          disabled={fetching}
+          title={`GET ${doc.request.url}\nClic (o F5) per ripetere la richiesta`}
+        >
+          {fetching
+            ? 'GET in corso…'
+            : doc.response
+              ? // con HTTP/2 lo statusText è vuoto
+                `GET ${[doc.response.status, doc.response.statusText].filter(Boolean).join(' ')} · ${doc.response.ms} ms ↻`
+              : 'GET ↻'}
+        </button>
+      )}
       {!hasFsAccess && <span className="warn" title="Usa Chrome o Edge per salvare direttamente su disco">Modalità ridotta</span>}
       <div className="spacer" />
       {doc && (

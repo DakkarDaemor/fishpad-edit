@@ -16,6 +16,7 @@ import { detectByContent, detectByFilename } from '../editor/languages'
 import type { TabColor } from './tabColors'
 import { diffRange } from './textDiff'
 import type { Encoding } from '../encoding'
+import type { UrlRequest, UrlResponse } from '../remote'
 import { saveSession, type Eol, type Session } from '../store'
 import { isValidLayout, leaf, paneIds, removePane, setSizes, splitPane, type Layout, type SplitDir } from './layout'
 
@@ -36,6 +37,10 @@ export interface Doc {
   /** `lastModified` del file su disco all'ultima lettura o scrittura: serve ad accorgersi delle modifiche esterne */
   mtime?: number
   color?: TabColor
+  /** tab collegata a un URL (in alternativa a `handle`): si ricarica rifacendo la richiesta */
+  request?: UrlRequest
+  /** esito dell'ultima richiesta */
+  response?: UrlResponse
 }
 
 /** Contenuto letto da disco con cui sostituire quello di un documento. */
@@ -83,6 +88,8 @@ export interface NewDocInput {
   cursor?: number
   folds?: Array<[number, number]>
   color?: TabColor
+  request?: UrlRequest
+  response?: UrlResponse
 }
 
 /** Segna le modifiche replicate da un altro pannello sullo stesso documento (da non replicare di nuovo). */
@@ -190,7 +197,7 @@ export class Workbench {
 
   isBlank(docId: string) {
     const d = this.docs.get(docId)
-    return !!d && !d.handle && !d.dirty && (this.anyState(docId)?.doc.length ?? 0) === 0
+    return !!d && !d.handle && !d.request && !d.dirty && (this.anyState(docId)?.doc.length ?? 0) === 0
   }
 
   async findByHandle(handle: FileSystemFileHandle) {
@@ -258,8 +265,13 @@ export class Workbench {
     return changes.length ? `Convertite ${changes.length} righe in ${indentLabel(to)}` : 'Niente da convertire'
   }
 
+  /** Documento collegato all'URL indicato. */
+  findByUrl(url: string) {
+    return [...this.docs.values()].find((d) => d.request?.url === url)
+  }
+
   /**
-   * Sostituisce il testo con la versione su disco in tutti i pannelli, toccando solo la parte cambiata.
+   * Sostituisce il testo con la versione su disco (o scaricata dall'URL) in tutti i pannelli, toccando solo la parte cambiata.
    * Il documento torna "salvato"; Ctrl+Z riporta il testo di prima.
    */
   replaceFromDisk(docId: string, disk: DiskContent) {
@@ -302,6 +314,8 @@ export class Workbench {
       handle: input.handle,
       mtime: input.mtime,
       color: input.color,
+      request: input.request,
+      response: input.response,
     }
     this.docs.set(id, doc)
     this.createInstance(paneId, doc, input.content, input.cursor, input.folds)

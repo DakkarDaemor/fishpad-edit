@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { tabColorVar } from '../workbench/tabColors'
 import type { Doc, Pane, Workbench } from '../workbench/Workbench'
-import { ContextMenu } from './Menu'
+import { ContextMenu, type MenuItem } from './Menu'
 import { tabColorItems } from './tabColorMenu'
 
 const TAB_MIME = 'application/x-fishpad-tab'
@@ -12,6 +12,8 @@ interface Props {
   docs: ReadonlyMap<string, Doc>
   active: boolean
   multiPane: boolean
+  /** voci aggiunte dall'app al menu col tasto destro della tab (preferiti, ricarica…) */
+  tabMenuExtra: (doc: Doc) => MenuItem[]
 }
 
 interface DraggedTab {
@@ -23,7 +25,13 @@ const isTabDrag = (e: DragEvent) => e.dataTransfer.types.includes(TAB_MIME)
 const copyDrag = (e: DragEvent) => e.ctrlKey || e.metaKey
 
 /** Un pannello: barra delle tab + EditorView di CodeMirror (gestita dal Workbench). */
-export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
+function tabTitle(d: Doc) {
+  if (d.handle) return d.name
+  if (d.request) return `${d.name}\nGET ${d.request.url}`
+  return `${d.name} (non salvato su disco)`
+}
+
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; docId: string } | null>(null)
@@ -70,7 +78,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
               data-doc-id={id}
               className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
               style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
-              title={`${d.handle ? d.name : `${d.name} (non salvato su disco)`}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
+              title={`${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
               draggable
               onDragStart={(e) => {
                 e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
@@ -138,6 +146,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane }: Props) {
             { label: 'Apri a destra', action: () => void wb.split('row', pane.id, menuDoc.id) },
             { label: 'Apri in basso', action: () => void wb.split('column', pane.id, menuDoc.id) },
             'separator',
+            ...tabMenuExtra(menuDoc),
             { heading: 'Colore' },
             ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),
             'separator',

@@ -16,6 +16,11 @@ interface Window {
   readonly launchQueue?: LaunchQueue
 }
 
+// Rinomina sul posto (Chromium), non ancora nei tipi
+interface FileSystemHandle {
+  move?(newName: string): Promise<void>
+}
+
 interface DataTransferItem {
   getAsFileSystemHandle?(): Promise<FileSystemHandle | null>
 }

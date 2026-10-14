@@ -2,6 +2,14 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 6.0
+
+- Esplora file: File → Apri cartella mostra la cartella in una barra laterale a sinistra (`Ctrl+B`, o Visualizza → Barra laterale). Un clic apre il file, le cartelle si leggono solo quando le apri, e l'albero si aggiorna tornando all'app. Col tasto destro si creano file e cartelle, si rinomina, si elimina (con conferma: non va nel Cestino) e si copia il percorso relativo. Rinominando un file o una cartella, le tab aperte seguono il nuovo percorso e `Ctrl+S` continua a salvare nel posto giusto.
+- La cartella aperta sostituisce la "Cartella dell'anteprima": l'anteprima HTML carica da lì CSS, script e immagini. Chi aveva scelto una cartella dell'anteprima la ritrova aperta nell'esplora file. Dopo un riavvio del browser basta un clic su "Riconnetti" per ridare il permesso.
+- Tab collegate a un URL: File → Apri URL (o Preferiti → Apri URL) fa una richiesta GET, con header facoltativi (per esempio `Authorization`), e mostra la risposta in una tab. Il JSON viene formattato senza alterare i numeri grandi. La barra di stato mostra codice HTTP e tempo di risposta; `F5`, o un clic lì, ripete la richiesta. Salvando la tab su disco diventa un file normale.
+- Gli errori di rete hanno un messaggio chiaro: server non raggiungibile, richiesta bloccata da CORS, indirizzo `http` chiamato da una pagina `https`.
+- Preferiti: URL e file da riaprire con un clic, nella barra laterale e nel menu Preferiti (quindi anche nella palette dei comandi). Si aggiungono con ☆, dal menu della tab o dall'esplora file; col tasto destro si modificano, si riordinano e si rimuovono. Gli header degli URL vengono salvati in chiaro nel browser.
+
 ## 5.0
 
 - File modificati da un altro programma: `Ctrl+S` chiede conferma prima di sovrascrivere un file cambiato su disco dopo l'ultima lettura. Tornando all'app, i file aperti che sono cambiati si ricaricano da soli se non hanno modifiche, altrimenti l'app chiede cosa fare.

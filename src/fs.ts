@@ -125,10 +125,10 @@ export async function filesFromDrop(dt: DataTransfer): Promise<OpenedFile[]> {
 
 export const hasFolderAccess = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
-/** Sceglie una cartella (solo lettura); null se annullato. */
+/** Sceglie una cartella, con il permesso di modificarla (esplora file); null se annullato. */
 export async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
   try {
-    return await window.showDirectoryPicker({ mode: 'read' })
+    return await window.showDirectoryPicker({ mode: 'readwrite' })
   } catch (err) {
     if (isAbort(err)) return null
     throw err

@@ -7,9 +7,12 @@ import { openReplacePanel, type EditorSettings } from './editor/setup'
 import { foldLevel } from './editor/folding'
 import { detectByFilename, extensionFor } from './editor/languages'
 import { canFormat, formatCode } from './editor/format'
+import { DEFAULT_INDENT } from './editor/indentation'
 import {
+  detectEol,
   diskMtime,
   ensurePermission,
+  fileInFolder,
   filesFromDrop,
   hasFolderAccess,
   hasFsAccess,
@@ -31,14 +34,18 @@ import {
   loadSettings,
   saveFolder,
   saveSettings,
+  type Bookmark,
   type RecentFile,
   type Settings,
   type ThemeMode,
 } from './store'
+import { fetchUrl, fileBaseName, languageFor, tabNameFor, type UrlRequest } from './remote'
+import { renameEntry, type TreeEntry } from './explorer'
+import { bookmarkFor, findDuplicate, useBookmarks } from './bookmarks'
 import { encode, type Encoding } from './encoding'
 import { Workbench, type Doc } from './workbench/Workbench'
 import { diffRange } from './workbench/textDiff'
-import { MenuBar, type MenuDef } from './components/Menu'
+import { MenuBar, type MenuDef, type MenuItem } from './components/Menu'
 import { SplitView } from './components/SplitView'
 import { EditorPane } from './components/EditorPane'
 import { StatusBar } from './components/StatusBar'
@@ -48,12 +55,20 @@ import { tabColorItems } from './components/tabColorMenu'
 import { CommandPalette } from './components/CommandPalette'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
+import { Sidebar } from './components/Sidebar'
+import { BookmarkList } from './components/BookmarkList'
+import { FileTree, NoFolder } from './components/FileTree'
+import { UrlDialog, type UrlDialogResult } from './components/UrlDialog'
 import { Runner } from './runner/Runner'
 import { runTarget } from './runner/transpile'
 import { folderAssets } from './runner/folderAssets'
 
 const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
+/** Oltre questa dimensione una risposta JSON non viene formattata (Prettier diventa lento). */
+const MAX_FORMAT_CHARS = 2_000_000
+
+type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
 function toEditorSettings(s: Settings, systemDark: boolean): EditorSettings {
   return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap }
@@ -74,12 +89,24 @@ export default function App() {
   const [dragging, setDragging] = useState(false)
   const [palette, setPalette] = useState<'commands' | 'tabs' | null>(null)
   const [help, setHelp] = useState<HelpView | null>(null)
-  /** Cartella da cui l'anteprima HTML carica CSS, script e immagini referenziati dalla pagina */
-  const [previewFolder, setPreviewFolder] = useState<FileSystemDirectoryHandle | null>(null)
+  /** Cartella dell'esplora file; l'anteprima HTML carica da qui CSS, script e immagini referenziati dalla pagina */
+  const [folder, setFolderState] = useState<FileSystemDirectoryHandle | null>(null)
+  /** cambia a ogni nuova cartella: l'albero ricomincia da capo */
+  const [folderKey, setFolderKey] = useState(0)
+  /** percorso nella cartella del file della tab attiva (calcolato in modo asincrono), per evidenziarlo nell'albero */
+  const [resolved, setResolved] = useState<{ folder: FileSystemDirectoryHandle; handle: FileSystemFileHandle; path: string | null } | null>(null)
+  const [sidebarWidth, setSidebarWidth] = useState(250)
+  const bookmarks = useBookmarks()
+  const [urlDialog, setUrlDialog] = useState<UrlDialogState | null>(null)
+  /** URL con una richiesta in corso (lo stato serve al render, il ref alle funzioni asincrone) */
+  const [fetching, setFetching] = useState<ReadonlySet<string>>(new Set())
+  const busyUrls = useRef(new Set<string>())
   const toastTimer = useRef<number | undefined>(undefined)
   /** Per documento: ultima versione su disco per cui l'utente ha scelto di tenere le sue modifiche. */
   const keptOverDisk = useRef(new Map<string, number>())
   const checkingDisk = useRef(false)
+  /** finché le impostazioni salvate non sono state lette, quelle predefinite non vanno scritte sopra */
+  const settingsLoaded = useRef(false)
 
   function flash(msg: string | null) {
     if (!msg) return
@@ -101,23 +128,29 @@ export default function App() {
     return !!pane
   }
 
-  async function openFiles(files: OpenedFile[]) {
-    if (!files.length) return
-    // una sola tab vuota e intatta nel pannello attivo viene sostituita dal primo file aperto
+  /** Esegue `add`: se il pannello attivo aveva solo una tab vuota e intatta, viene sostituita da ciò che si è aperto. */
+  async function replacingBlank(add: () => Promise<void>) {
     const pane = wb.activePane
     const blankId = pane.docIds.length === 1 && wb.isBlank(pane.docIds[0]) ? pane.docIds[0] : null
-    for (const f of files) {
-      if (f.handle) {
-        const existing = await wb.findByHandle(f.handle)
-        if (existing) {
-          showDoc(existing.id)
-          continue
-        }
-        setRecents(await addRecent(f.handle))
-      }
-      wb.addDoc(f)
-    }
+    await add()
     if (blankId && wb.activePane.docIds.length > 1) wb.closeTab(wb.activePane.id, blankId, true)
+  }
+
+  async function openFiles(files: OpenedFile[]) {
+    if (!files.length) return
+    await replacingBlank(async () => {
+      for (const f of files) {
+        if (f.handle) {
+          const existing = await wb.findByHandle(f.handle)
+          if (existing) {
+            showDoc(existing.id)
+            continue
+          }
+          setRecents(await addRecent(f.handle))
+        }
+        wb.addDoc(f)
+      }
+    })
   }
 
   async function openDialog() {
@@ -128,12 +161,13 @@ export default function App() {
     }
   }
 
-  async function openRecent(r: RecentFile) {
+  /** Apre un file di cui si ha l'handle (recenti, preferiti, esplora file), chiedendo il permesso se serve. */
+  async function openHandle(handle: FileSystemFileHandle) {
     try {
-      if (!(await ensurePermission(r.handle, 'read'))) return
-      await openFiles([await readHandle(r.handle)])
+      if (!(await ensurePermission(handle, 'read'))) return
+      await openFiles([await readHandle(handle)])
     } catch {
-      flash(`Impossibile aprire "${r.name}" (spostato o eliminato?)`)
+      flash(`Impossibile aprire "${handle.name}" (spostato o eliminato?)`)
     }
   }
 
@@ -173,11 +207,14 @@ export default function App() {
       }
       const data = encodeDoc(doc)
       if (!data) return
-      const suggested = doc.name.includes('.') ? doc.name : `${doc.name}${extensionFor(doc.lang)}`
+      const base = doc.request ? fileBaseName(new URL(doc.request.url)) : doc.name
+      const suggested = base.includes('.') ? base : `${base}${extensionFor(doc.lang)}`
       const handle = await saveAs(suggested, data)
       if (handle === null) return // annullato
       if (handle) {
-        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false, mtime: (await diskMtime(handle)) ?? undefined })
+        // una tab URL salvata su disco diventa quel file
+        const mtime = (await diskMtime(handle)) ?? undefined
+        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false, mtime, request: undefined, response: undefined })
         setRecents(await addRecent(handle))
         const byName = detectByFilename(handle.name)
         if (byName && byName !== doc.lang) void wb.setLanguage(doc.id, byName, false)
@@ -236,6 +273,171 @@ export default function App() {
       console.warn('[checkDisk]', err)
     } finally {
       checkingDisk.current = false
+    }
+  }
+
+  // ---------- tab collegate a un URL ----------
+
+  function setBusy(url: string, on: boolean) {
+    if (on) busyUrls.current.add(url)
+    else busyUrls.current.delete(url)
+    setFetching(new Set(busyUrls.current))
+  }
+
+  /** Scarica l'URL; il JSON viene formattato con Prettier, che (a differenza di JSON.parse) non arrotonda i numeri grandi. */
+  async function download(request: UrlRequest) {
+    const got = await fetchUrl(request)
+    const lang = languageFor(got.response.contentType, new URL(request.url))
+    let text = got.text
+    if (lang === 'JSON' && text.length <= MAX_FORMAT_CHARS) {
+      text = await formatCode(text, 'JSON', 0, DEFAULT_INDENT).then((r) => r.formatted, () => text)
+    }
+    return { ...got, text, lang }
+  }
+
+  /** Apre l'URL in una tab; se è già aperto, la mostra e ripete la richiesta (con gli header indicati). */
+  async function openUrl(request: UrlRequest, name?: string) {
+    const existing = wb.findByUrl(request.url)
+    if (existing) {
+      showDoc(existing.id)
+      wb.patchDoc(existing.id, { request })
+      await refreshUrl(existing.id)
+      return
+    }
+    if (busyUrls.current.has(request.url)) return
+    const url = new URL(request.url)
+    setBusy(request.url, true)
+    flash(`GET ${url.host}…`)
+    try {
+      const got = await download(request)
+      await replacingBlank(async () => {
+        wb.addDoc({
+          name: name || tabNameFor(url),
+          content: got.text,
+          eol: detectEol(got.text),
+          lang: got.lang,
+          langAuto: got.lang === undefined,
+          request,
+          response: got.response,
+        })
+      })
+      const { status, statusText } = got.response
+      if (status >= 400) flash(`HTTP ${status} ${statusText}`.trim())
+      else setToast(null) // toglie "GET host…"
+    } catch (err) {
+      flash((err as Error).message)
+    } finally {
+      setBusy(request.url, false)
+    }
+  }
+
+  /** Ripete la richiesta della tab URL, dopo conferma se ci sono modifiche. */
+  async function refreshUrl(docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    if (!doc?.request || busyUrls.current.has(doc.request.url)) return
+    if (doc.dirty && !confirm(`Scartare le modifiche a "${doc.name}" e ripetere la richiesta?`)) return
+    const { url } = doc.request
+    setBusy(url, true)
+    try {
+      const got = await download(doc.request)
+      // nel frattempo la tab può essere stata chiusa o salvata su disco
+      if (wb.doc(doc.id)?.request?.url !== url) return
+      wb.replaceFromDisk(doc.id, { content: got.text, eol: detectEol(got.text), encoding: 'utf-8' })
+      wb.patchDoc(doc.id, { response: got.response })
+      const { status, statusText, ms } = got.response
+      flash(status >= 400 ? `HTTP ${status} ${statusText}`.trim() : `Aggiornato: ${doc.name} (${ms} ms)`)
+    } catch (err) {
+      flash((err as Error).message)
+    } finally {
+      setBusy(url, false)
+    }
+  }
+
+  // ---------- preferiti ----------
+
+  async function addBookmark(b: Bookmark) {
+    const dup = await findDuplicate(bookmarks.list, b)
+    if (dup) {
+      flash(`Già nei preferiti: ${dup.name}`)
+      return
+    }
+    bookmarks.add(b)
+    flash(`Aggiunto ai preferiti: ${b.name}`)
+  }
+
+  function bookmarkDoc(docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    const b = doc && bookmarkFor(doc)
+    if (b) void addBookmark(b)
+    else flash('Salva prima il file su disco')
+  }
+
+  function openBookmark(b: Bookmark) {
+    if (b.kind === 'url') void openUrl(b.request, b.name)
+    else void openHandle(b.handle)
+  }
+
+  function editBookmark(b: Bookmark) {
+    if (b.kind === 'url') {
+      setUrlDialog({ mode: 'edit', bookmark: b })
+      return
+    }
+    const name = prompt('Nome del preferito:', b.name)?.trim()
+    if (name) bookmarks.update(b.id, { name })
+  }
+
+  function submitUrlDialog(state: UrlDialogState, { request, name, bookmark }: UrlDialogResult) {
+    setUrlDialog(null)
+    const finalName = name || tabNameFor(new URL(request.url))
+    if (state.mode === 'edit') {
+      bookmarks.update(state.bookmark.id, { name: finalName, request })
+      return
+    }
+    void openUrl(request, name || undefined)
+    if (bookmark) void addBookmark({ id: crypto.randomUUID(), name: finalName, kind: 'url', request })
+  }
+
+  // ---------- cartella (esplora file) ----------
+
+  function setFolder(dir: FileSystemDirectoryHandle | null) {
+    setFolderState(dir)
+    setFolderKey((k) => k + 1)
+    void saveFolder(dir)
+  }
+
+  async function openFolder() {
+    try {
+      const dir = await pickFolder()
+      if (!dir) return
+      setFolder(dir)
+      setSettings((s) => ({ ...s, sidebar: true }))
+    } catch (err) {
+      flash(`Errore: ${(err as Error).message}`)
+    }
+  }
+
+  /**
+   * Rinomina un file o una cartella dell'esplora file. Le tab dei file coinvolti (il file stesso, o quelli
+   * dentro la cartella) passano al nuovo percorso, così Ctrl+S continua a salvare nel posto giusto.
+   */
+  async function renameInFolder(parent: FileSystemDirectoryHandle, entry: TreeEntry, newName: string) {
+    const affected: Array<{ id: string; rel: string[] }> = []
+    for (const d of wb.allDocs) {
+      if (!d.handle) continue
+      let rel: string[] | null
+      if (entry.handle.kind === 'file') rel = (await entry.handle.isSameEntry(d.handle).catch(() => false)) ? [] : null
+      else rel = await entry.handle.resolve(d.handle).catch(() => null)
+      if (rel) affected.push({ id: d.id, rel })
+    }
+    const renamed = await renameEntry(parent, entry.handle, newName)
+    for (const { id, rel } of affected) {
+      const handle = renamed.kind === 'file' ? renamed : await fileInFolder(renamed, rel)
+      const doc = wb.doc(id)
+      if (!handle || !doc) continue
+      const mtime = (await diskMtime(handle).catch(() => null)) ?? doc.mtime
+      wb.patchDoc(id, { handle, name: handle.name, mtime })
+      const byName = detectByFilename(handle.name)
+      if (renamed.kind === 'file' && byName && byName !== doc.lang) void wb.setLanguage(id, byName, false)
     }
   }
 
@@ -339,14 +541,13 @@ export default function App() {
   }
 
   /**
-   * Esegue l'anteprima del documento, con i file locali della cartella dell'anteprima se la pagina sta lì dentro.
+   * Esegue l'anteprima del documento, con i file locali della cartella aperta se la pagina sta lì dentro.
    * `ask`: si può chiedere il permesso di lettura (solo su azione dell'utente, non negli aggiornamenti dal vivo).
    */
   async function runPreview(docId: string, ask = true) {
     const doc = wb.doc(docId)
     if (!doc) return
     let assets = null
-    const folder = previewFolder
     if (folder && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
       const granted = ask
         ? await ensurePermission(folder, 'read').catch(() => false)
@@ -364,23 +565,6 @@ export default function App() {
     void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
   }
 
-  async function choosePreviewFolder() {
-    try {
-      const dir = await pickFolder()
-      if (!dir) return
-      setPreviewFolder(dir)
-      void saveFolder(dir)
-      flash(`Cartella dell'anteprima: ${dir.name}`)
-    } catch (err) {
-      flash(`Errore: ${(err as Error).message}`)
-    }
-  }
-
-  function forgetPreviewFolder() {
-    setPreviewFolder(null)
-    void saveFolder(null)
-  }
-
   function gotoDocLine(docId: string, line: number) {
     if (!showDoc(docId)) {
       flash('Il file eseguito non è più aperto')
@@ -395,12 +579,14 @@ export default function App() {
 
   const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
   const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
+  const toggleSidebar = () => setSettings((s) => ({ ...s, sidebar: !s.sidebar }))
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const actions = useRef({ openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive, checkDisk, formatActive, runPreview })
+  const all = { openDialog, save, openFiles, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl }
+  const actions = useRef(all)
   useEffect(() => {
-    actions.current = { openDialog, save, openFiles, closeActiveTab, toggleWrap, runActive, checkDisk, formatActive, runPreview }
+    actions.current = all
   })
 
   // ---------- inizializzazione ----------
@@ -415,9 +601,10 @@ export default function App() {
         loadFolder(),
       ])
       if (cancelled) return
+      settingsLoaded.current = true
       setSettings(savedSettings)
       setRecents(savedRecents)
-      setPreviewFolder(savedFolder)
+      setFolderState(savedFolder)
       wb.setEditorSettings(toEditorSettings(savedSettings, darkQuery.matches))
       if (!session || !wb.restore(session)) wb.newUntitled()
       void actions.current.checkDisk()
@@ -451,6 +638,9 @@ export default function App() {
       else if ((mod && e.shiftKey && !e.altKey && code === 'KeyP') || e.key === 'F1') setPalette('commands')
       else if (mod && !e.shiftKey && !e.altKey && code === 'KeyP') setPalette('tabs')
       else if (e.altKey && e.shiftKey && !mod && code === 'KeyF') void a.formatActive()
+      else if (mod && !e.shiftKey && !e.altKey && code === 'KeyB') a.toggleSidebar()
+      // F5 ripete la richiesta di una tab URL; altrove resta al browser
+      else if (e.key === 'F5' && !mod && !e.altKey && !e.shiftKey && wb.activeDoc?.request) void a.refreshUrl()
       // negli altri file Ctrl+Enter resta all'editor (riga vuota sotto)
       else if (mod && !e.altKey && !e.shiftKey && e.key === 'Enter') handled = a.runActive()
       else handled = false
@@ -516,8 +706,8 @@ export default function App() {
     let timer: number | undefined
     const off = wb.onContentChange((docId) => {
       const shown = runner.getSnapshot().preview?.docId
-      // anche le modifiche ai file su disco (CSS, script…) che la pagina può caricare dalla cartella dell'anteprima
-      if (!shown || (shown !== docId && !(previewFolder && wb.doc(docId)?.handle))) return
+      // anche le modifiche ai file su disco (CSS, script…) che la pagina può caricare dalla cartella aperta
+      if (!shown || (shown !== docId && !(folder && wb.doc(docId)?.handle))) return
       clearTimeout(timer)
       timer = window.setTimeout(() => {
         const id = runner.getSnapshot().preview?.docId
@@ -528,7 +718,7 @@ export default function App() {
       off()
       clearTimeout(timer)
     }
-  }, [wb, runner, previewFolder])
+  }, [wb, runner, folder])
 
   // Tema di sistema
   useEffect(() => {
@@ -542,7 +732,7 @@ export default function App() {
     const es = toEditorSettings(settings, systemDark)
     document.documentElement.dataset.theme = es.dark ? 'dark' : 'light'
     wb.setEditorSettings(es)
-    void saveSettings(settings)
+    if (settingsLoaded.current) void saveSettings(settings)
   }, [wb, settings, systemDark])
 
   const activePane = snap.panes.get(snap.activePaneId)
@@ -551,6 +741,21 @@ export default function App() {
   useEffect(() => {
     document.title = active ? `${active.dirty ? '● ' : ''}${active.name} — Fishpad Edit` : 'Fishpad Edit'
   }, [active])
+
+  // File della tab attiva nell'albero dell'esplora file
+  const activeHandle = active?.handle
+  useEffect(() => {
+    if (!folder || !activeHandle) return
+    let cancelled = false
+    folder
+      .resolve(activeHandle)
+      .catch(() => null)
+      .then((path) => !cancelled && setResolved({ folder, handle: activeHandle, path: path ? path.join('/') : null }))
+    return () => {
+      cancelled = true
+    }
+  }, [folder, activeHandle])
+  const activePath = resolved && resolved.folder === folder && resolved.handle === activeHandle ? resolved.path : null
 
   // ---------- menu ----------
 
@@ -565,11 +770,13 @@ export default function App() {
       items: [
         { label: 'Nuovo', shortcut: 'Alt+N', action: () => wb.newUntitled() },
         { label: 'Apri…', shortcut: 'Ctrl+O', action: () => void openDialog() },
+        { label: 'Apri URL…', action: () => setUrlDialog({ mode: 'open' }) },
+        ...(hasFolderAccess ? [{ label: 'Apri cartella…', action: () => void openFolder() }] : []),
         {
           label: 'Apri recente',
           submenu: hasFsAccess
             ? [
-                ...recents.map((r) => ({ label: r.name, action: () => void openRecent(r) })),
+                ...recents.map((r) => ({ label: r.name, action: () => void openHandle(r.handle) })),
                 ...(recents.length
                   ? [
                       'separator' as const,
@@ -589,10 +796,13 @@ export default function App() {
         { label: 'Salva', shortcut: 'Ctrl+S', disabled: !active, action: () => void save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Shift+S', disabled: !active, action: () => void save(undefined, true) },
         { label: 'Salva tutto', disabled: !anyDirty, action: () => void saveAll() },
-        { label: 'Ricarica dal disco', disabled: !active?.handle, action: () => void reload() },
+        active?.request
+          ? { label: "Ricarica dall'URL", shortcut: 'F5', action: () => void refreshUrl() }
+          : { label: 'Ricarica dal disco', disabled: !active?.handle, action: () => void reload() },
         'separator',
         { label: 'Chiudi tab', shortcut: 'Alt+W', action: closeActiveTab },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
+        ...(hasFolderAccess ? [{ label: 'Chiudi cartella', disabled: !folder, action: () => setFolder(null) }] : []),
       ],
     },
     {
@@ -619,6 +829,7 @@ export default function App() {
       items: [
         { label: 'Palette dei comandi…', shortcut: 'Ctrl+Shift+P', action: () => setPalette('commands') },
         { label: 'Vai a una tab…', shortcut: 'Ctrl+P', action: () => setPalette('tabs') },
+        { label: 'Barra laterale', shortcut: 'Ctrl+B', checked: settings.sidebar, action: toggleSidebar },
         'separator',
         { label: 'Dividi a destra', shortcut: 'Ctrl+\\', action: () => void wb.split('row') },
         { label: 'Dividi in basso', action: () => void wb.split('column') },
@@ -659,6 +870,16 @@ export default function App() {
       ],
     },
     {
+      label: 'Preferiti',
+      items: [
+        { label: 'Aggiungi la tab ai preferiti', disabled: !active?.handle && !active?.request, action: () => bookmarkDoc() },
+        { label: 'Apri URL…', action: () => setUrlDialog({ mode: 'open' }) },
+        ...(bookmarks.list.length
+          ? ['separator' as const, ...bookmarks.list.map((b) => ({ label: b.name, action: () => openBookmark(b) }))]
+          : []),
+      ],
+    },
+    {
       label: 'Esegui',
       items: [
         {
@@ -669,16 +890,6 @@ export default function App() {
         },
         { label: 'Stop', disabled: !runState.alive, action: () => runner.stop() },
         { label: 'Chiudi anteprima', disabled: !runState.preview, action: () => runner.closePreview() },
-        ...(hasFolderAccess
-          ? [
-              'separator' as const,
-              {
-                label: previewFolder ? `Cartella dell'anteprima: ${previewFolder.name}…` : "Cartella dell'anteprima…",
-                action: () => void choosePreviewFolder(),
-              },
-              { label: 'Scollega la cartella', disabled: !previewFolder, action: forgetPreviewFolder },
-            ]
-          : []),
         'separator',
         { label: 'Pulisci console', disabled: !runState.entries.length, action: () => runner.clear() },
       ],
@@ -706,13 +917,21 @@ export default function App() {
         return {
           id: d.id,
           label: `${d.dirty ? '● ' : ''}${d.name}`,
-          detail: [d.handle ? '' : 'non salvato', multi && n >= 0 ? `pannello ${n + 1}` : ''].filter(Boolean).join(' · '),
+          detail: [d.handle ? '' : d.request ? new URL(d.request.url).host : 'non salvato', multi && n >= 0 ? `pannello ${n + 1}` : ''].filter(Boolean).join(' · '),
           run: () => showDoc(d.id),
         }
       })
   }
 
+  /** Voci del menu col tasto destro di una tab che dipendono dall'app. */
+  const tabMenuExtra = (doc: Doc): MenuItem[] => [
+    ...(doc.request ? [{ label: "Ricarica dall'URL", action: () => void refreshUrl(doc.id) }] : []),
+    { label: 'Aggiungi ai preferiti', disabled: !doc.handle && !doc.request, action: () => bookmarkDoc(doc.id) },
+    'separator',
+  ]
+
   const closeOverlay = () => {
+    setUrlDialog(null)
     setPalette(null)
     setHelp(null)
     wb.activeView?.focus()
@@ -732,6 +951,34 @@ export default function App() {
       </header>
 
       <main className="workspace">
+        {settings.sidebar && (
+          <Sidebar width={sidebarWidth} onResize={setSidebarWidth}>
+            <BookmarkList
+              list={bookmarks.list}
+              canAdd={!!(active?.handle || active?.request)}
+              onAdd={() => bookmarkDoc()}
+              onOpenUrl={() => setUrlDialog({ mode: 'open' })}
+              onOpen={openBookmark}
+              onEdit={editBookmark}
+              onRemove={bookmarks.remove}
+              onMove={bookmarks.move}
+            />
+            {folder ? (
+              <FileTree
+                key={folderKey}
+                root={folder}
+                activePath={activePath}
+                onOpen={(h) => void openHandle(h)}
+                onBookmark={(handle) => void addBookmark({ id: crypto.randomUUID(), name: handle.name, kind: 'file', handle })}
+                onRename={renameInFolder}
+                onCloseFolder={() => setFolder(null)}
+                onMessage={flash}
+              />
+            ) : (
+              <NoFolder supported={hasFolderAccess} onOpenFolder={() => void openFolder()} />
+            )}
+          </Sidebar>
+        )}
         <SplitView
           layout={snap.layout}
           onResize={(path, sizes) => wb.resize(path, sizes)}
@@ -745,6 +992,7 @@ export default function App() {
                 docs={snap.docs}
                 active={multiPane && paneId === snap.activePaneId}
                 multiPane={multiPane}
+                tabMenuExtra={tabMenuExtra}
               />
             ) : null
           }}
@@ -790,6 +1038,8 @@ export default function App() {
           if (active && encoding !== active.encoding) wb.patchDoc(active.id, { encoding, dirty: true })
         }}
         onReopen={(encoding) => void reload(active?.id, encoding)}
+        fetching={!!active?.request && fetching.has(active.request.url)}
+        onRefreshUrl={() => void refreshUrl()}
       />
 
       {palette && (
@@ -801,6 +1051,14 @@ export default function App() {
         />
       )}
       {help && <HelpDialog view={help} onView={setHelp} onClose={closeOverlay} />}
+      {urlDialog && (
+        <UrlDialog
+          mode={urlDialog.mode}
+          initial={urlDialog.mode === 'edit' ? urlDialog.bookmark : undefined}
+          onSubmit={(result) => submitUrlDialog(urlDialog, result)}
+          onClose={closeOverlay}
+        />
+      )}
 
       {toast && <div className="toast" role="status">{toast}</div>}
       {dragging && <div className="drop-overlay">Rilascia per aprire</div>}

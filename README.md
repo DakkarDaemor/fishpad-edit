@@ -15,6 +15,9 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 - **File locali**: grazie alla File System Access API, `Ctrl+S` scrive sullo stesso file su disco. C'è anche "Salva con nome". Se nel frattempo il file è stato modificato da un altro programma, prima di sovrascriverlo chiede conferma.
 - **Modifiche esterne**: tornando all'app, i file cambiati su disco si ricaricano da soli se non hanno modifiche; se ne hanno, l'app chiede cosa fare. File → Ricarica dal disco rilegge il file a mano, e anche questo si annulla con `Ctrl+Z`.
 - **File recenti**: tiene gli handle dei file, quindi riaprendo un recente il browser chiede solo il permesso.
+- **Esplora file** (`Ctrl+B` per la barra laterale): File → Apri cartella mostra l'albero della cartella. Le sottocartelle si leggono solo quando le apri, l'albero si aggiorna tornando all'app, e il file della tab attiva è evidenziato. Col tasto destro: nuovo file, nuova cartella, rinomina, elimina (definitivo, con conferma), copia percorso relativo, aggiungi ai preferiti. Le tab dei file rinominati seguono il nuovo percorso. Dopo un riavvio il browser chiede di nuovo il permesso (pulsante "Riconnetti").
+- **Tab URL**: File → Apri URL esegue una richiesta GET, con header facoltativi, e apre la risposta in una tab. Il linguaggio viene dal `Content-Type`; il JSON è formattato con Prettier, che non arrotonda i numeri grandi. La barra di stato mostra codice HTTP e tempo; `F5` (o un clic lì) ripete la richiesta. Il server deve consentire le richieste dall'app (CORS); da una pagina `https` non si possono chiamare indirizzi `http`, tranne localhost. Salvata su disco, la tab diventa un file normale.
+- **Preferiti**: URL e file da riaprire con un clic, nella barra laterale e nel menu Preferiti. Si aggiungono con ☆ (tab attiva), dal menu della tab, dall'esplora file o spuntando "Aggiungi ai preferiti" in Apri URL. Gli header vengono salvati in chiaro nel browser.
 - **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.
 - **Drag & drop di file** sulla finestra. Su Chromium il file resta collegato a quello su disco.
 - **Syntax highlight per circa 140 linguaggi** (`@codemirror/language-data`, caricati solo quando servono). Il linguaggio si riconosce dal nome del file; per il testo incollato in una tab senza nome lo riconosce dal contenuto, con euristiche a punteggio per JavaScript, TypeScript, JSX, TSX, CSS, HTML e JSON. Mentre scrivi può passare a un linguaggio più specifico (per esempio da JS a TSX quando aggiungi i tipi), finché non lo scegli tu a mano.
@@ -26,7 +29,7 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 - **Indentazione per file**: spazi o tab e relativa larghezza vengono rilevati dal contenuto. Si possono cambiare dalla barra di stato, e c'è la conversione dell'intero file tra spazi e tab (annullabile con `Ctrl+Z`).
 - **Console JavaScript / TypeScript**: `Ctrl+Enter` esegue il file attivo, o solo la selezione, e mostra l'output in un pannello in basso, con `await` al livello principale, oggetti formattati e la riga degli errori cliccabile. Il codice gira in un Web Worker dentro un iframe `sandbox` con origine opaca: non accede a sessione e file dell'editor, e un loop infinito non blocca l'interfaccia (Stop termina tutto). TypeScript viene eseguito togliendo i tipi con sucrase, senza controllarli. Il modulo si carica solo al primo uso e conserva i numeri di riga.
 - **Anteprima HTML / React / Markdown**: per i file HTML, JSX, TSX e Markdown `Ctrl+Enter` apre un pannello a destra che si aggiorna mentre scrivi. Log ed errori della pagina vanno nella console. Nei file JSX/TSX si possono importare `react`, `react-dom` e `react-dom/client`: sono le build di produzione della versione usata dall'app, quindi funzionano offline. L'export default, o una funzione `App`, viene montato in automatico se il codice non chiama `createRoot`. Il Markdown viene mostrato come su GitHub (tabelle, liste di controllo…).
-- **File locali nell'anteprima HTML**: con Esegui → Cartella dell'anteprima si sceglie la cartella del sito; per le pagine al suo interno, CSS, script, immagini e font referenziati con percorsi relativi vengono caricati da lì (anche gli `url()` dentro i CSS). Se uno di quei file è aperto nell'editor si usa il testo attuale, anche non salvato, e l'anteprima si aggiorna mentre lo modifichi. I pacchetti npm non vengono caricati.
+- **File locali nell'anteprima HTML**: per le pagine dentro la cartella aperta nell'esplora file, CSS, script, immagini e font referenziati con percorsi relativi vengono caricati da lì (anche gli `url()` dentro i CSS). Se uno di quei file è aperto nell'editor si usa il testo attuale, anche non salvato, e l'anteprima si aggiorna mentre lo modifichi. I pacchetti npm non vengono caricati.
 - **Suggerimenti** mentre scrivi (`Ctrl+Spazio` per richiamarli): tag e attributi HTML, proprietà CSS, parole chiave e snippet JS/TS.
 - **Emmet** in HTML, JSX/TSX, CSS, SCSS, LESS e simili: si scrive un'abbreviazione (`ul>li*3`, `m10`) e `Tab` la espande, `Ctrl+E` la forza.
 - **Colori CSS**: un quadratino accanto a ogni colore nei fogli di stile e in HTML; cliccandolo si apre il selettore del sistema, e il valore viene riscritto nello stesso formato (hex, `rgb()`, `hsl()`), mantenendo la trasparenza.
@@ -44,6 +47,8 @@ Editor di testo per desktop nel browser, con syntax highlight e folding del codi
 | Vai a una tab aperta | `Ctrl+P` |
 | Nuova tab | `Ctrl+N` (nella PWA) / `Alt+N` |
 | Apri | `Ctrl+O` |
+| Barra laterale (preferiti ed esplora file) | `Ctrl+B` |
+| Ripeti la richiesta della tab URL | `F5` |
 | Salva / Salva con nome | `Ctrl+S` / `Ctrl+Shift+S` |
 | Chiudi tab | `Ctrl+W` (nella PWA) / `Alt+W` |
 | Dividi a destra (stesso file, scroll separato) | `Ctrl+\` |
@@ -79,18 +84,22 @@ src/
   App.tsx              menu, azioni sui file, scorciatoie globali
   workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
   workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
-  components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel, CommandPalette, HelpDialog
+  components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel, CommandPalette, HelpDialog,
+                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL)
   components/commands.ts voci dei menu come comandi e ricerca approssimata della palette (+ commands.test.ts)
   shortcuts.ts         elenco delle scorciatoie mostrato in Aiuto
   runner/Runner.ts     esecuzione del codice e raccolta dell'output della console
   runner/transpile.ts  linguaggi eseguibili (console o anteprima) e traspilazione TS/JSX (+ transpile.test.ts)
   runner/preview.ts    documenti dell'anteprima HTML, React e Markdown (+ preview.test.ts)
   runner/assets.ts     file locali della pagina in anteprima come URL data: (+ assets.test.ts)
-  runner/folderAssets.ts lettura di quei file dalla cartella dell'anteprima o dall'editor
+  runner/folderAssets.ts lettura di quei file dalla cartella aperta o dall'editor
   runner/react-vendor.ts React per l'anteprima, con un require minimale
   runner/sandbox.ts    sorgenti di iframe e worker: console, formattazione dei valori, mappatura degli errori
   fs.ts                File System Access API e fallback upload/download
-  store.ts             IndexedDB: sessione (con migrazione dal formato v1), impostazioni, recenti
+  explorer.ts          lettura della cartella, crea / rinomina / elimina (+ explorer.test.ts)
+  remote.ts            tab URL: richiesta GET, header, messaggi d'errore, linguaggio della risposta (+ remote.test.ts)
+  bookmarks.ts         preferiti: lista salvata in IndexedDB (+ bookmarks.test.ts)
+  store.ts             IndexedDB: sessione (con migrazione dal formato v1), impostazioni, recenti, cartella, preferiti
   editor/setup.ts      estensioni CodeMirror e compartment (tema, font, linguaggio)
   editor/folding.ts    folding per indentazione, chiusura per livello, (de)serializzazione
   editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
@@ -123,7 +132,6 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 
 **v1**
 - Window Controls Overlay (tab nella barra del titolo)
-- Apri cartella (albero laterale semplice)
 - Strumenti JSON (ordina chiavi, minifica, vista ad albero)
 - Diff tra tab (`@codemirror/merge`)
 - Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { findDuplicate, moveItem } from './bookmarks'
-import type { Bookmark } from './store'
+import { findDuplicate, moveItem } from '../bookmarks'
+import type { Bookmark } from '../store'
 
 describe('moveItem', () => {
   const list = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]

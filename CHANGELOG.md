@@ -2,6 +2,13 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 9.0
+
+- Chat AI (Visualizza → Chat AI, `Ctrl+Alt+I`): un pannello a destra dove fare domande sulla tab attiva. Ogni domanda manda il contenuto della tab in quel momento e, se c'è, la parte selezionata, che diventa l'argomento della domanda. Sopra il campo si vede quale tab sta per essere mandata. Le risposte sono formattate, e ogni blocco di codice ha Copia, Inserisci (al cursore o al posto della selezione, annullabile con `Ctrl+Z`) e Confronta, che apre il confronto con la tab per prendere solo i blocchi che servono. Con l'anteprima aperta, in alto si passa da Anteprima a Chat. Sul telefono la chat copre l'editor, come l'anteprima.
+- Provider: OpenRouter, Groq e Google Gemini (con piano gratuito), OpenAI e Anthropic, con la propria chiave. I file troppo lunghi (oltre circa 50.000 token) non vengono mandati interi: basta selezionare la parte che interessa.
+- Impostazioni (Visualizza → Impostazioni…, `Ctrl+,`): tema, dimensione del testo e a capo automatico; le scelte del confronto; le chiavi dei provider, con l'elenco dei modelli disponibili da cui scegliere quelli da usare nella chat. Le chiavi restano nel browser, salvate in chiaro, e il codice eseguito in anteprima e in console non può leggerle.
+- Il menu Visualizza è più corto: Tema e Dimensione predefinita si trovano ora in Impostazioni → Aspetto. Ingrandisci / Riduci testo e A capo automatico restano dove sono.
+
 ## 8.1
 
 - Confronto: la barra mostra quante righe sono state aggiunte e tolte (+N −M) oltre al numero di differenze.

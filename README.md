@@ -37,8 +37,9 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Controllo JSON**: gli errori di sintassi sono sottolineati e segnati nel margine.
 - **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown e YAML. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
 - **Confronta** (Modifica → Confronta): la tab contro la versione su disco, un'altra tab, gli appunti o un file, affiancati o in vista unificata, con le differenze evidenziate dentro la riga e le righe uguali piegate. A destra si modifica e le frecce portano i blocchi dall'altro lato; "Ignora formattazione" passa i testi da Prettier per nascondere le differenze di sola formattazione.
+- **Chat AI** (`Ctrl+Alt+I`): domande sulla tab attiva (o sulla parte selezionata) in un pannello a destra, con la propria chiave di OpenRouter, Groq, Google Gemini, OpenAI o Anthropic. I blocchi di codice delle risposte si copiano, si inseriscono nel file o si confrontano con la tab. Le chiavi si impostano in **Impostazioni** (`Ctrl+,`), insieme a tema, font e opzioni del confronto; restano nel browser, in chiaro.
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
-- **Tema** chiaro, scuro o di sistema; dimensione del font; a capo automatico
+- **Tema** chiaro, scuro o di sistema e dimensione del font, in Impostazioni (`Ctrl+,`); a capo automatico (`Alt+Z`) e ingrandisci / riduci testo anche da Visualizza
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), codifica UTF-8 o Windows-1252. La codifica viene rilevata in apertura: se il file non è UTF-8 valido viene letto come Windows-1252, e il BOM UTF-8 viene rimosso. Il file si salva nella stessa codifica, e dalla barra di stato si può cambiare quella di salvataggio o riaprire il file con un'altra.
 
 ## Telefono e tablet
@@ -91,6 +92,8 @@ Sui dispositivi touch, a qualunque larghezza:
 | Vai alla riga | `Ctrl+Alt+G` |
 | Formatta documento (Prettier) | `Shift+Alt+F` |
 | Differenza successiva / precedente (nel confronto) | `F7` / `Shift+F7` |
+| Chat AI | `Ctrl+Alt+I` |
+| Impostazioni | `Ctrl+,` |
 | Espandi abbreviazione Emmet | `Tab` (o `Ctrl+E`) |
 | Mostra i suggerimenti | `Ctrl+Spazio` |
 | Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown) | `Ctrl+Enter` |
@@ -111,7 +114,9 @@ npm run preview
 npm test          # test unitari (vitest)
 ```
 
-Stack: Vite, React, TypeScript, CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet.
+I test (`+ nome.test.ts` nell'elenco qui sotto) stanno nella sottocartella `__tests__` della cartella del codice che provano.
+
+Stack: Vite, React, TypeScript, CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet, `@anthropic-ai/sdk` (solo per il provider Anthropic).
 
 ```
 src/
@@ -119,7 +124,7 @@ src/
   workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
   workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
   components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel, CommandPalette, HelpDialog,
-                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL), KeyBar (tasti sopra la tastiera), DiffDialog (confronto)
+                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL), KeyBar (tasti sopra la tastiera), DiffDialog (confronto), ChatPanel, SettingsDialog
   components/touch.ts  schermo stretto e touch: media query, pressione prolungata, viewport sopra la tastiera virtuale
   components/commands.ts voci dei menu come comandi e ricerca approssimata della palette (+ commands.test.ts)
   shortcuts.ts         elenco delle scorciatoie mostrato in Aiuto
@@ -147,6 +152,10 @@ src/
   editor/web.ts        Emmet, colori CSS e controllo JSON, caricati in base al linguaggio
   editor/colors.ts     quadratini e selettore dei colori CSS (calcoli in colorValue.ts)
   editor/format.ts     Prettier, con i plugin caricati solo quando servono
+  editor/diffStats.ts  righe aggiunte e tolte nel confronto (+ diffStats.test.ts)
+  ai/providers.ts      provider AI: client compatibile OpenAI e Anthropic (SDK caricato al primo uso) (+ providers.test.ts)
+  ai/context.ts        prompt di sistema con la tab attiva e la selezione (+ context.test.ts)
+  ai/markdown.ts       Markdown delle risposte senza HTML, link pericolosi né immagini esterne (+ markdown.test.ts)
   encoding.ts          lettura e scrittura in UTF-8 / Windows-1252 (+ encoding.test.ts)
 ```
 
@@ -176,7 +185,7 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 - Playground: `import` da npm (esm.sh), controllo dei tipi
 
 **Dopo**
-- Azioni AI con la propria chiave API
+- Chat AI: risposte in streaming, cronologia salvata, più tab come contesto
 - Modalità Vim
 - Snippet
 - Minimappa

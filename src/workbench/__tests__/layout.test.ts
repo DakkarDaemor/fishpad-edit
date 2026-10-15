@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidLayout, leaf, moveDivider, paneIds, removePane, splitPane, type Layout } from './layout'
+import { isValidLayout, leaf, moveDivider, paneIds, removePane, splitPane, type Layout } from '../layout'
 
 describe('splitPane', () => {
   it('trasforma una foglia in una divisione a metà', () => {

@@ -1,5 +1,6 @@
-import { useCallback, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import type { Runner } from '../runner/Runner'
+import { useSideResize } from './sideResize'
 
 interface Props {
   runner: Runner
@@ -12,39 +13,32 @@ interface Props {
   onToggleConsole: () => void
   /** schermo del telefono: l'anteprima copre l'editor, e si nasconde senza chiuderla */
   overlay?: { hidden: boolean; onHide: () => void }
+  /** al posto del titolo, le schede Anteprima | Chat quando sono aperte entrambe */
+  tabs?: ReactNode
+  /** dietro la chat: nascosta ma non smontata */
+  hidden?: boolean
 }
 
 /** Pannello a destra con la pagina HTML o il componente React del documento in anteprima. */
-export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole, overlay }: Props) {
+export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole, overlay, tabs, hidden }: Props) {
   const { preview, alive, entries } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
   const errors = entries.filter((e) => e.level === 'error').length
   const host = useCallback((el: HTMLDivElement | null) => runner.setPreviewHost(el), [runner])
 
-  const drag = useRef<{ x: number; w: number } | null>(null)
-  const onDown = (e: ReactPointerEvent) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, w: width }
-  }
-  const onMove = (e: ReactPointerEvent) => {
-    if (!drag.current) return
-    const max = window.innerWidth - 240
-    onResize(Math.round(Math.min(max, Math.max(200, drag.current.w + drag.current.x - e.clientX))))
-  }
+  const resize = useSideResize(width, onResize)
 
   if (!preview) return null
   const name = docName ?? preview.name
   return (
     <>
-      {!overlay && (
-        <div className="gutter preview-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
-      )}
+      {!overlay && !hidden && <div className="gutter preview-gutter" {...resize} />}
       {/* nascosta e non smontata: l'iframe della pagina resta vivo */}
-      <aside className={`preview${overlay ? ' overlay' : ''}`} style={overlay ? undefined : { width }} hidden={overlay?.hidden}>
+      <aside className={`preview${overlay ? ' overlay' : ''}`} style={overlay ? undefined : { width }} hidden={hidden || overlay?.hidden}>
         <header className="panel-bar">
           {overlay && (
             <button onClick={overlay.onHide} title="Torna all'editor (l'anteprima resta aperta)">‹ Editor</button>
           )}
-          <span className="panel-title">Anteprima</span>
+          {tabs ?? <span className="panel-title">Anteprima</span>}
           <span className="preview-name" title={name}>{name}</span>
           <div className="spacer" />
           <button onClick={onReload} title="Ricarica (Ctrl+Enter)">↻ Ricarica</button>

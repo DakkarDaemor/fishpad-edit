@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkspacePath } from './workspace'
+import { parseWorkspacePath } from '../workspace'
 
 describe('parseWorkspacePath', () => {
   it('divide il percorso in cartelle e nome del file', () => {

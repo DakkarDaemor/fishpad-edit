@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Text } from '@codemirror/state'
 import { Chunk } from '@codemirror/merge'
-import { lineDelta } from './diffStats'
+import { lineDelta } from '../diffStats'
 
 const delta = (a: string, b: string) => {
   const ta = Text.of(a.split('\n'))

@@ -47,7 +47,6 @@ import {
   type DiffPrefs,
   type RecentFile,
   type Settings,
-  type ThemeMode,
 } from './store'
 import { fetchUrl, fileBaseName, languageFor, tabNameFor, type UrlRequest } from './remote'
 import { renameEntry, type TreeEntry } from './explorer'
@@ -68,6 +67,9 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { tabColorItems } from './components/tabColorMenu'
 import { CommandPalette } from './components/CommandPalette'
 import { DiffDialog, type DiffSide } from './components/DiffDialog'
+import { ChatPanel } from './components/ChatPanel'
+import { SettingsDialog, type SettingsView } from './components/SettingsDialog'
+import { contextLabel, type TabContext } from './ai/context'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
 import { Sidebar } from './components/Sidebar'
@@ -113,6 +115,10 @@ export default function App() {
   const [dragging, setDragging] = useState(false)
   const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | null>(null)
   const [diff, setDiff] = useState<DiffState | null>(null)
+  const [settingsView, setSettingsView] = useState<SettingsView | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
+  /** con anteprima e chat aperte insieme, quale si vede nella colonna destra */
+  const [rightTab, setRightTab] = useState<'preview' | 'chat'>('preview')
   const [help, setHelp] = useState<HelpView | null>(null)
   /** Cartella dell'esplora file; l'anteprima HTML carica da qui CSS, script e immagini referenziati dalla pagina */
   const [folder, setFolderState] = useState<FileSystemDirectoryHandle | null>(null)
@@ -668,6 +674,56 @@ export default function App() {
     flash('Modifiche del confronto applicate alla tab (Ctrl+Z per annullare)')
   }
 
+  // ---------- chat ----------
+
+  /** La tab attiva e la sua selezione, da mandare con la domanda. */
+  function tabContext(withContent = true): TabContext | null {
+    const doc = wb.activeDoc
+    const v = wb.activeView
+    if (!doc || !v) return null
+    const s = v.state
+    const r = s.selection.main
+    return {
+      name: doc.name,
+      lang: doc.lang,
+      content: withContent ? s.doc.toString() : '',
+      selection: r.empty ? undefined : { text: withContent ? s.sliceDoc(r.from, r.to) : '', fromLine: s.doc.lineAt(r.from).number, toLine: s.doc.lineAt(r.to).number },
+    }
+  }
+
+  /** Mostra la chat (aprendola se serve); se è già in vista, la chiude. */
+  function toggleChat() {
+    const visible = chatOpen && (rightTab === 'chat' || !runner.getSnapshot().preview) && !(compact && previewHidden)
+    if (visible) {
+      setChatOpen(false)
+      wb.activeView?.focus()
+      return
+    }
+    setChatOpen(true)
+    setRightTab('chat')
+    setPreviewHidden(false)
+  }
+
+  /** Codice della chat al cursore, o al posto della selezione (annullabile con Ctrl+Z). */
+  function insertCode(code: string) {
+    const v = wb.activeView
+    if (!v) return
+    v.dispatch(v.state.replaceSelection(code), { userEvent: 'input.paste', scrollIntoView: true })
+    // sul telefono la chat copre l'editor
+    setPreviewHidden(true)
+    v.focus()
+  }
+
+  /** Confronta la tab con la proposta della chat: se c'è una selezione, la proposta prende il suo posto. */
+  function compareCode(code: string) {
+    const doc = wb.activeDoc
+    const v = wb.activeView
+    if (!doc || !v) return
+    const r = v.state.selection.main
+    const text = r.empty ? code : v.state.sliceDoc(0, r.from) + code + v.state.sliceDoc(r.to)
+    openDiff({ title: r.empty ? 'Proposta della chat' : 'Tab con la proposta della chat al posto della selezione', text }, doc.id)
+  }
+
   // ---------- esecuzione ----------
 
   /**
@@ -714,7 +770,10 @@ export default function App() {
     const current = wb.doc(docId)
     if (!current) return
     // aperta dall'utente (non un aggiornamento dal vivo): sul telefono torna in primo piano
-    if (ask) setPreviewHidden(false)
+    if (ask) {
+      setPreviewHidden(false)
+      setRightTab('preview')
+    }
     void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
   }
 
@@ -732,7 +791,6 @@ export default function App() {
     v.focus()
   }
 
-  const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
   const setDiffPrefs = useCallback((patch: Partial<DiffPrefs>) => setSettings((s) => ({ ...s, diff: { ...s.diff, ...patch } })), [])
   const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
   // sul telefono la barra laterale è un cassetto che si apre all'occorrenza, e non resta aperta tra una sessione e l'altra
@@ -740,7 +798,7 @@ export default function App() {
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl }
+  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat }
   const actions = useRef(all)
   useEffect(() => {
     actions.current = all
@@ -809,6 +867,8 @@ export default function App() {
       else if (mod && !e.shiftKey && !e.altKey && code === 'KeyP') setPalette('tabs')
       else if (e.altKey && e.shiftKey && !mod && code === 'KeyF') void a.formatActive()
       else if (mod && !e.shiftKey && !e.altKey && code === 'KeyB') a.toggleSidebar()
+      else if (mod && !e.shiftKey && !e.altKey && code === 'Comma') setSettingsView('look')
+      else if (mod && e.altKey && !e.shiftKey && code === 'KeyI') a.toggleChat()
       // F5 ripete la richiesta di una tab URL; altrove resta al browser
       else if (e.key === 'F5' && !mod && !e.altKey && !e.shiftKey && wb.activeDoc?.request) void a.refreshUrl()
       // negli altri file Ctrl+Enter resta all'editor (riga vuota sotto)
@@ -957,6 +1017,18 @@ export default function App() {
   const activeTarget = runTarget(active?.lang)
   const canRun = activeTarget !== null
 
+  /** colonna destra: la chat si vede se è aperta e, con l'anteprima aperta, se è la scheda scelta */
+  const chatShown = chatOpen && (!runState.preview || rightTab === 'chat')
+  const rightTabs =
+    runState.preview && chatOpen ? (
+      <span className="right-tabs">
+        <button className={chatShown ? undefined : 'current'} onClick={() => setRightTab('preview')}>Anteprima</button>
+        <button className={chatShown ? 'current' : undefined} onClick={() => setRightTab('chat')}>Chat</button>
+      </span>
+    ) : undefined
+  const chatContext = chatOpen ? tabContext(false) : null
+  const chatLabel = chatContext && contextLabel(chatContext)
+
   const menus: MenuDef[] = [
     {
       label: 'File',
@@ -1054,19 +1126,9 @@ export default function App() {
           ],
         },
         'separator',
-        {
-          label: 'Tema',
-          submenu: (
-            [
-              ['system', 'Sistema'],
-              ['light', 'Chiaro'],
-              ['dark', 'Scuro'],
-            ] as Array<[ThemeMode, string]>
-          ).map(([value, label]) => ({ label, checked: settings.theme === value, action: () => setSetting('theme', value) })),
-        },
+        // tema e dimensione predefinita stanno in Impostazioni → Aspetto
         { label: 'Ingrandisci testo', action: () => zoom(1) },
         { label: 'Riduci testo', action: () => zoom(-1) },
-        { label: `Dimensione predefinita (${DEFAULT_SETTINGS.fontSize})`, action: () => setSetting('fontSize', DEFAULT_SETTINGS.fontSize) },
         'separator',
         {
           label: 'Colore tab',
@@ -1076,6 +1138,9 @@ export default function App() {
         { label: 'A capo automatico', shortcut: 'Alt+Z', checked: settings.wrap, action: toggleWrap },
         'separator',
         { label: 'Console', checked: consoleOpen, action: () => setConsoleOpen((o) => !o) },
+        { label: 'Chat AI', shortcut: 'Ctrl+Alt+I', checked: chatOpen, action: toggleChat },
+        'separator',
+        { label: 'Impostazioni…', shortcut: 'Ctrl+,', action: () => setSettingsView('look') },
       ],
     },
     {
@@ -1179,6 +1244,7 @@ export default function App() {
   }
 
   const closeOverlay = () => {
+    setSettingsView(null)
     setUrlDialog(null)
     setPalette(null)
     setHelp(null)
@@ -1198,8 +1264,10 @@ export default function App() {
         <div className="spacer" />
         {compact ? (
           <>
-            {runState.preview && previewHidden && (
-              <button className="title-action" onClick={() => setPreviewHidden(false)} title="Mostra l'anteprima">Anteprima</button>
+            {(runState.preview || chatOpen) && previewHidden && (
+              <button className="title-action" onClick={() => setPreviewHidden(false)} title={chatShown ? 'Mostra la chat' : "Mostra l'anteprima"}>
+                {chatShown ? 'Chat' : 'Anteprima'}
+              </button>
             )}
             {canRun && (
               <button className="title-action" onClick={() => void runActive()} title={activeTarget === 'preview' ? 'Anteprima del file' : 'Esegui file o selezione'} aria-label="Esegui">
@@ -1263,7 +1331,29 @@ export default function App() {
           onReload={() => runState.preview && runPreview(runState.preview.docId)}
           onToggleConsole={() => setConsoleOpen((o) => !o)}
           overlay={compact ? { hidden: previewHidden, onHide: () => setPreviewHidden(true) } : undefined}
+          tabs={rightTabs}
+          hidden={chatShown}
         />
+        {chatOpen && (
+          <ChatPanel
+            ai={settings.ai}
+            onModel={(model) => setSettings((s) => ({ ...s, ai: { ...s.ai, model } }))}
+            label={chatLabel}
+            getContext={() => tabContext()}
+            onInsert={insertCode}
+            onCompare={compareCode}
+            onOpenSettings={() => setSettingsView('ai')}
+            onClose={() => {
+              setChatOpen(false)
+              wb.activeView?.focus()
+            }}
+            width={previewWidth}
+            onResize={setPreviewWidth}
+            overlay={compact ? { hidden: previewHidden, onHide: () => setPreviewHidden(true) } : undefined}
+            tabs={rightTabs}
+            hidden={!chatShown}
+          />
+        )}
       </main>
 
       {consoleOpen && (
@@ -1320,6 +1410,15 @@ export default function App() {
           prefs={{ ...settings.diff, unified: settings.diff.unified ?? compact }}
           onPrefs={setDiffPrefs}
           onClose={closeDiff}
+        />
+      )}
+      {settingsView && (
+        <SettingsDialog
+          settings={settings}
+          view={settingsView}
+          onView={setSettingsView}
+          onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+          onClose={closeOverlay}
         />
       )}
       {help && <HelpDialog view={help} onView={setHelp} onClose={closeOverlay} />}

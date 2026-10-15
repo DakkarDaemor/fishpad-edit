@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import vm from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { bridgeSource, type BridgeOptions } from './sandbox'
+import { bridgeSource, type BridgeOptions } from '../sandbox'
 
 interface Message {
   kind: string

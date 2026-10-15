@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { htmlDocument, reactDocument } from './preview'
-import { buildWorkerSource } from './sandbox'
+import { htmlDocument, reactDocument } from '../preview'
+import { buildWorkerSource } from '../sandbox'
 
 describe('htmlDocument', () => {
   it('inserisce il bridge dopo il doctype senza aggiungere righe', () => {

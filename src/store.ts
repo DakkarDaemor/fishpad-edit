@@ -5,6 +5,7 @@ import type { Layout } from './workbench/layout'
 import type { TabColor } from './workbench/tabColors'
 import type { UrlRequest, UrlResponse } from './remote'
 import { packHandle, unpackHandle, type StoredHandle } from './workspace'
+import { DEFAULT_PROVIDERS, mergeProviders, type AiProvider } from './ai/providers'
 
 export type Eol = 'LF' | 'CRLF'
 export type ThemeMode = 'system' | 'light' | 'dark'
@@ -17,6 +18,14 @@ export interface Settings {
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
   diff: DiffPrefs
+  ai: AiSettings
+}
+
+export interface AiSettings {
+  /** chiavi in chiaro in IndexedDB, come gli header dei preferiti URL */
+  providers: AiProvider[]
+  /** ultimo modello scelto nella chat */
+  model?: { providerId: string; model: string }
 }
 
 export interface DiffPrefs {
@@ -34,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wrap: false,
   sidebar: false,
   diff: { collapse: true, normalize: false },
+  ai: { providers: DEFAULT_PROVIDERS },
 }
 
 export interface SavedDoc {
@@ -143,7 +153,10 @@ export const loadSession = () =>
 export const saveSession = (s: Session) => safe(async () => set(KEY_SESSION, { ...s, docs: await Promise.all(s.docs.map(pack)) }), undefined)
 
 export const loadSettings = () =>
-  safe(async () => ({ ...DEFAULT_SETTINGS, ...((await get<Partial<Settings>>(KEY_SETTINGS)) ?? {}) }), DEFAULT_SETTINGS)
+  safe(async () => {
+    const saved = (await get<Partial<Settings>>(KEY_SETTINGS)) ?? {}
+    return { ...DEFAULT_SETTINGS, ...saved, ai: { ...saved.ai, providers: mergeProviders(saved.ai?.providers) } }
+  }, DEFAULT_SETTINGS)
 export const saveSettings = (s: Settings) => safe(() => set(KEY_SETTINGS, s), undefined)
 
 export const loadRecents = () => safe(async () => (await get<RecentFile[]>(KEY_RECENTS)) ?? [], [] as RecentFile[])

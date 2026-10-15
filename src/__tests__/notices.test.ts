@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deviceNotices, type Env } from './notices'
+import { deviceNotices, type Env } from '../notices'
 
 const base: Env = { fsAccess: false, workspace: true, iOS: false, android: false, standalone: false, touch: false }
 const ids = (env: Partial<Env>) => deviceNotices({ ...base, ...env }).map((n) => n.id)

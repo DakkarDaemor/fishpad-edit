@@ -2,7 +2,7 @@
 import vm from 'node:vm'
 import { version } from 'react'
 import { describe, expect, it } from 'vitest'
-import { REACT_MODULES, reactVendorScript } from './react-vendor'
+import { REACT_MODULES, reactVendorScript } from '../react-vendor'
 
 // Il registro punta a file interni dei pacchetti React (cjs/*.production.js): se un aggiornamento
 // li rinomina o aggiunge dipendenze, l'anteprima si romperebbe solo a runtime.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { filterItems, fuzzyScore, menuCommands, type PaletteItem } from './commands'
+import { filterItems, fuzzyScore, menuCommands, type PaletteItem } from '../commands'
 
 const noop = () => {}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decode, encode } from './encoding'
+import { decode, encode } from '../encoding'
 
 const bytes = (...b: number[]) => new Uint8Array(b)
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { compareEntries, invalidName, joinPath, parentPath, renameEntry } from './explorer'
+import { compareEntries, invalidName, joinPath, parentPath, renameEntry } from '../explorer'
 
 const entry = (name: string, kind: 'file' | 'directory') => ({ name, handle: { kind } })
 

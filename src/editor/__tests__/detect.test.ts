@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectByContent } from './detect'
+import { detectByContent } from '../detect'
 
 const cases: Array<[string, string | null, string]> = [
   ['JSON', 'JSON', '{\n  "a": 1,\n  "b": [true, null]\n}'],

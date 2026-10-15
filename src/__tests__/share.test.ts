@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sharedUrl } from './share'
+import { sharedUrl } from '../share'
 
 describe('sharedUrl', () => {
   it('usa il campo url', () => {

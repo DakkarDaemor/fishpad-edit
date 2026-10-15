@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { blockedAsMixedContent, fetchUrl, formatHeaders, languageFor, parseHeaders, parseUrl, tabNameFor } from './remote'
+import { blockedAsMixedContent, fetchUrl, formatHeaders, languageFor, parseHeaders, parseUrl, tabNameFor } from '../remote'
 
 describe('parseHeaders', () => {
   it('legge "Nome: valore" uno per riga, saltando righe vuote e commenti', () => {

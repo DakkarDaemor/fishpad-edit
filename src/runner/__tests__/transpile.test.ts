@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CompileError, runTarget, toJavaScript } from './transpile'
+import { CompileError, runTarget, toJavaScript } from '../transpile'
 
 describe('toJavaScript', () => {
   it('lascia invariato il JavaScript', async () => {

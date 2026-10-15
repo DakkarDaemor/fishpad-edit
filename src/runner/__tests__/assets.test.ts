@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mimeFor, resolvePath, rewriteHtml, type AssetResolver } from './assets'
+import { mimeFor, resolvePath, rewriteHtml, type AssetResolver } from '../assets'
 
 describe('resolvePath', () => {
   it('risolve percorsi relativi alla cartella della pagina', () => {

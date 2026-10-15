@@ -15,6 +15,8 @@ export const SHORTCUTS: Array<[string, string]> = [
   ['Vai alla riga', 'Ctrl+Alt+G'],
   ['Formatta documento (Prettier)', 'Shift+Alt+F'],
   ['Differenza successiva / precedente (nel confronto)', 'F7 / Shift+F7'],
+  ['Chat AI', 'Ctrl+Alt+I'],
+  ['Impostazioni', 'Ctrl+,'],
   ['Espandi abbreviazione Emmet', 'Tab (o Ctrl+E)'],
   ['Mostra i suggerimenti', 'Ctrl+Spazio'],
   ['Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown)', 'Ctrl+Enter'],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffRange } from './textDiff'
+import { diffRange } from '../textDiff'
 
 const apply = (a: string, d: ReturnType<typeof diffRange>) => (d ? a.slice(0, d.from) + d.insert + a.slice(d.to) : a)
 

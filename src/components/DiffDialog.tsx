@@ -3,11 +3,13 @@ import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, drawSelection, highlightSpecialChars, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language'
-import { MergeView, getChunks, goToNextChunk, goToPreviousChunk, unifiedMergeView } from '@codemirror/merge'
+import { MergeView, getChunks, getOriginalDoc, goToNextChunk, goToPreviousChunk, mergeViewSiblings, unifiedMergeView } from '@codemirror/merge'
 import { fontExtension, themeExtension, wrapExtension, type EditorSettings } from '../editor/setup'
 import { loadLanguage } from '../editor/languages'
 import { canFormat, formatCode } from '../editor/format'
 import type { Indent } from '../editor/indentation'
+import { lineDelta } from '../editor/diffStats'
+import type { DiffPrefs } from '../store'
 
 export interface DiffSide {
   title: string
@@ -22,7 +24,9 @@ interface Props {
   lang: string | null
   indent: Indent
   settings: EditorSettings
-  unified: boolean
+  /** scelte ricordate tra un confronto e l'altro (`unified` già risolto) */
+  prefs: DiffPrefs & { unified: boolean }
+  onPrefs: (patch: Partial<DiffPrefs>) => void
   /** riceve il testo finale della tab */
   onClose: (text: string) => void
 }
@@ -56,14 +60,23 @@ function extensions(settings: EditorSettings, lang: Extension, readOnly: boolean
  * "Ignora formattazione" passa entrambi i testi da Prettier, così re-indentazioni e a capo non contano
  * (in quel caso è in sola lettura: il testo formattato non è quello della tab).
  */
-export function DiffDialog({ other, mine, lang, indent, settings, unified: unifiedDefault, onClose }: Props) {
+/** Differenze, righe tolte e aggiunte; null finché il confronto non è pronto. */
+function summarize(view: EditorView) {
+  const found = getChunks(view.state)
+  if (!found) return null
+  const a = mergeViewSiblings(view)?.a.state.doc ?? getOriginalDoc(view.state)
+  return { chunks: found.chunks.length, ...lineDelta(found.chunks, a, view.state.doc) }
+}
+
+export function DiffDialog({ other, mine, lang, indent, settings, prefs, onPrefs, onClose }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const mineText = useRef(mine.text)
   const editable = useRef<EditorView | null>(null)
-  const [unified, setUnified] = useState(unifiedDefault)
-  const [collapse, setCollapse] = useState(true)
-  const [normalize, setNormalize] = useState(false)
-  const [count, setCount] = useState<number | null>(null)
+  const { unified, collapse } = prefs
+  // senza Prettier per questo linguaggio la scelta ricordata non vale
+  const normalize = prefs.normalize && canFormat(lang)
+  const [summary, setSummary] = useState<ReturnType<typeof summarize>>(null)
+  const count = summary?.chunks ?? null
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -79,7 +92,7 @@ export function DiffDialog({ other, mine, lang, indent, settings, unified: unifi
         } catch (err) {
           if (cancelled) return
           setError(`Prettier non riesce a formattare: ${(err as Error).message.split('\n')[0]}`)
-          setNormalize(false)
+          onPrefs({ normalize: false })
           return
         }
       }
@@ -88,7 +101,7 @@ export function DiffDialog({ other, mine, lang, indent, settings, unified: unifi
       const collapseUnchanged = collapse ? { margin: 3, minSize: 4 } : undefined
       const track = EditorView.updateListener.of((u) => {
         if (u.docChanged && !normalize) mineText.current = u.state.doc.toString()
-        setCount(getChunks(u.state)?.chunks.length ?? null)
+        setSummary(summarize(u.view))
       })
       if (unified) {
         const view = new EditorView({
@@ -96,7 +109,7 @@ export function DiffDialog({ other, mine, lang, indent, settings, unified: unifi
           doc: b,
           extensions: [
             extensions(settings, langExt, normalize),
-            unifiedMergeView({ original: a, collapseUnchanged, mergeControls: !normalize }),
+            unifiedMergeView({ original: a, collapseUnchanged, mergeControls: !normalize, allowInlineDiffs: true }),
             track,
           ],
         })
@@ -114,14 +127,14 @@ export function DiffDialog({ other, mine, lang, indent, settings, unified: unifi
         destroy = () => mv.destroy()
       }
       // le differenze sono calcolate in modo asincrono: si contano al frame successivo
-      requestAnimationFrame(() => editable.current && setCount(getChunks(editable.current.state)?.chunks.length ?? null))
+      requestAnimationFrame(() => editable.current && setSummary(summarize(editable.current)))
     })()
     return () => {
       cancelled = true
       editable.current = null
       destroy()
     }
-  }, [other.text, lang, indent, settings, unified, collapse, normalize])
+  }, [other.text, lang, indent, settings, unified, collapse, normalize, onPrefs])
 
   const step = (next: boolean) => {
     const v = editable.current
@@ -152,19 +165,24 @@ export function DiffDialog({ other, mine, lang, indent, settings, unified: unifi
         <header className="panel-bar">
           <span className="panel-title">Confronto</span>
           <span className="diff-count">{count === null ? '' : count === 0 ? 'nessuna differenza' : count === 1 ? '1 differenza' : `${count} differenze`}</span>
+          {!!count && (
+            <span className="diff-delta" title="Righe aggiunte / tolte nella tab rispetto all'altro testo">
+              <ins>+{summary!.added}</ins> <del>−{summary!.removed}</del>
+            </span>
+          )}
           <button onClick={() => step(false)} disabled={!count} title="Differenza precedente (Shift+F7)" aria-label="Differenza precedente">↑</button>
           <button onClick={() => step(true)} disabled={!count} title="Differenza successiva (F7)" aria-label="Differenza successiva">↓</button>
           <div className="spacer" />
-          <button className={unified ? undefined : 'current'} onClick={() => setUnified(false)}>Affiancato</button>
-          <button className={unified ? 'current' : undefined} onClick={() => setUnified(true)}>Unificato</button>
+          <button className={unified ? undefined : 'current'} onClick={() => onPrefs({ unified: false })}>Affiancato</button>
+          <button className={unified ? 'current' : undefined} onClick={() => onPrefs({ unified: true })}>Unificato</button>
           <label className="diff-option" title="Piega le righe uguali lasciando 3 righe di contesto">
-            <input type="checkbox" checked={collapse} onChange={(e) => setCollapse(e.target.checked)} /> Solo modifiche
+            <input type="checkbox" checked={collapse} onChange={(e) => onPrefs({ collapse: e.target.checked })} /> Solo modifiche
           </label>
           <label
             className="diff-option"
             title={canFormat(lang) ? 'Formatta entrambi i testi con Prettier prima di confrontarli (sola lettura)' : `Prettier non supporta ${lang ?? 'il testo semplice'}`}
           >
-            <input type="checkbox" checked={normalize} disabled={!canFormat(lang)} onChange={(e) => setNormalize(e.target.checked)} /> Ignora formattazione
+            <input type="checkbox" checked={normalize} disabled={!canFormat(lang)} onChange={(e) => onPrefs({ normalize: e.target.checked })} /> Ignora formattazione
           </label>
           <button className="panel-close" onClick={close} title="Chiudi (Esc): le modifiche fatte a destra passano alla tab" autoFocus>
             ×

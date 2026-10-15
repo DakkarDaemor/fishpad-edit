@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { redo, selectAll, toggleComment, undo } from '@codemirror/commands'
 import { foldAll, unfoldAll } from '@codemirror/language'
@@ -44,6 +44,7 @@ import {
   saveSeenNotices,
   saveSettings,
   type Bookmark,
+  type DiffPrefs,
   type RecentFile,
   type Settings,
   type ThemeMode,
@@ -93,7 +94,7 @@ interface DiffState {
 
 type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
-function toEditorSettings(s: Settings, systemDark: boolean): EditorSettings {
+function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap'>, systemDark: boolean): EditorSettings {
   return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap }
 }
 
@@ -732,6 +733,7 @@ export default function App() {
   }
 
   const setSetting = <K extends keyof Settings>(key: K, value: Settings[K]) => setSettings((s) => ({ ...s, [key]: value }))
+  const setDiffPrefs = useCallback((patch: Partial<DiffPrefs>) => setSettings((s) => ({ ...s, diff: { ...s.diff, ...patch } })), [])
   const toggleWrap = () => setSettings((s) => ({ ...s, wrap: !s.wrap }))
   // sul telefono la barra laterale è un cassetto che si apre all'occorrenza, e non resta aperta tra una sessione e l'altra
   const toggleSidebar = () => (compact ? setDrawerOpen((o) => !o) : setSettings((s) => ({ ...s, sidebar: !s.sidebar })))
@@ -918,7 +920,8 @@ export default function App() {
   }, [])
 
   // Impostazioni → editor
-  const editorSettings = useMemo(() => toEditorSettings(settings, systemDark), [settings, systemDark])
+  const { theme, fontSize, wrap } = settings
+  const editorSettings = useMemo(() => toEditorSettings({ theme, fontSize, wrap }, systemDark), [theme, fontSize, wrap, systemDark])
   useEffect(() => {
     document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
     wb.setEditorSettings(editorSettings)
@@ -1314,7 +1317,8 @@ export default function App() {
           lang={diff.lang}
           indent={diff.indent}
           settings={editorSettings}
-          unified={compact}
+          prefs={{ ...settings.diff, unified: settings.diff.unified ?? compact }}
+          onPrefs={setDiffPrefs}
           onClose={closeDiff}
         />
       )}

@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 8.1
+
+- Confronto: la barra mostra quante righe sono state aggiunte e tolte (+N −M) oltre al numero di differenze.
+- Confronto: le scelte (affiancato o unificato, solo modifiche, ignora formattazione) restano per i confronti successivi, anche dopo aver chiuso l'app.
+- Confronto unificato: quando cambia solo una parte della riga, la riga compare una volta sola, con il testo tolto barrato accanto a quello nuovo.
+
 ## 8.0
 
 - Confronto tra due testi: Modifica → Confronta mette la tab attiva a confronto con la versione su disco (o con la risposta attuale, per le tab URL), con un'altra tab, con gli appunti o con un file. Dal menu col tasto destro di una tab la si confronta con quella attiva. Le differenze sono evidenziate anche dentro la riga, con la colorazione del codice, e le righe uguali restano piegate (togli "Solo modifiche" per vederle tutte).

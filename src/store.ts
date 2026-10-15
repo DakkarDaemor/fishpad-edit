@@ -15,9 +15,26 @@ export interface Settings {
   wrap: boolean
   /** barra laterale con preferiti ed esplora file */
   sidebar: boolean
+  /** ultime scelte fatte nel confronto */
+  diff: DiffPrefs
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system', fontSize: 14, wrap: false, sidebar: false }
+export interface DiffPrefs {
+  /** assente finché non si sceglie: unificato sul telefono, affiancato altrove */
+  unified?: boolean
+  /** righe uguali piegate */
+  collapse: boolean
+  /** testi passati da Prettier prima del confronto */
+  normalize: boolean
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  fontSize: 14,
+  wrap: false,
+  sidebar: false,
+  diff: { collapse: true, normalize: false },
+}
 
 export interface SavedDoc {
   id: string

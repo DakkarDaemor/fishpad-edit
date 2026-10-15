@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 8.0
+
+- Confronto tra due testi: Modifica → Confronta mette la tab attiva a confronto con la versione su disco (o con la risposta attuale, per le tab URL), con un'altra tab, con gli appunti o con un file. Dal menu col tasto destro di una tab la si confronta con quella attiva. Le differenze sono evidenziate anche dentro la riga, con la colorazione del codice, e le righe uguali restano piegate (togli "Solo modifiche" per vederle tutte).
+- Vista affiancata o unificata (sul telefono parte unificata). A destra c'è la tab, modificabile: le frecce, o "Usa l'altro" nella vista unificata, vi portano un blocco dell'altro testo. Alla chiusura le modifiche passano alla tab, e `Ctrl+Z` le annulla. `F7` / `Shift+F7` vanno alla differenza successiva o precedente.
+- "Ignora formattazione" passa i due testi da Prettier prima di confrontarli: re-indentazioni, a capo e virgolette non contano più, e restano solo le differenze vere. In questa modalità il confronto è in sola lettura.
+
 ## 7.0
 
 - Telefono e tablet: sotto i 700 px di larghezza l'interfaccia passa alla disposizione per telefono. Il menu sta dietro ☰ e i sottomenu si aprono uno alla volta, con "‹" per tornare indietro. Preferiti ed esplora file sono in un cassetto che si apre dal pulsante in alto a destra. Si vede un pannello alla volta (⇄ passa al successivo se la sessione ne ha più di uno), e l'anteprima copre l'editor: "‹ Editor" torna al codice senza chiuderla, "Anteprima" in alto la riporta in primo piano. In alto a destra c'è anche ▶ per eseguire il file.

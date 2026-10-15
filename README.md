@@ -36,6 +36,7 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Colori CSS**: un quadratino accanto a ogni colore nei fogli di stile e in HTML; cliccandolo si apre il selettore del sistema, e il valore viene riscritto nello stesso formato (hex, `rgb()`, `hsl()`), mantenendo la trasparenza.
 - **Controllo JSON**: gli errori di sintassi sono sottolineati e segnati nel margine.
 - **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown e YAML. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
+- **Confronta** (Modifica → Confronta): la tab contro la versione su disco, un'altra tab, gli appunti o un file, affiancati o in vista unificata, con le differenze evidenziate dentro la riga e le righe uguali piegate. A destra si modifica e le frecce portano i blocchi dall'altro lato; "Ignora formattazione" passa i testi da Prettier per nascondere le differenze di sola formattazione.
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
 - **Tema** chiaro, scuro o di sistema; dimensione del font; a capo automatico
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), codifica UTF-8 o Windows-1252. La codifica viene rilevata in apertura: se il file non è UTF-8 valido viene letto come Windows-1252, e il BOM UTF-8 viene rimosso. Il file si salva nella stessa codifica, e dalla barra di stato si può cambiare quella di salvataggio o riaprire il file con un'altra.
@@ -89,6 +90,7 @@ Sui dispositivi touch, a qualunque larghezza:
 | Cerca / sostituisci | `Ctrl+F` / `Ctrl+H` |
 | Vai alla riga | `Ctrl+Alt+G` |
 | Formatta documento (Prettier) | `Shift+Alt+F` |
+| Differenza successiva / precedente (nel confronto) | `F7` / `Shift+F7` |
 | Espandi abbreviazione Emmet | `Tab` (o `Ctrl+E`) |
 | Mostra i suggerimenti | `Ctrl+Spazio` |
 | Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown) | `Ctrl+Enter` |
@@ -109,7 +111,7 @@ npm run preview
 npm test          # test unitari (vitest)
 ```
 
-Stack: Vite, React, TypeScript, CodeMirror 6, `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet.
+Stack: Vite, React, TypeScript, CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet.
 
 ```
 src/
@@ -117,7 +119,7 @@ src/
   workbench/Workbench.ts modello: documenti, pannelli, EditorView, sincronizzazione, sessione
   workbench/layout.ts  albero dei pannelli divisi (+ layout.test.ts)
   components/          MenuBar, SplitView, EditorPane, StatusBar, ConsolePanel, PreviewPanel, CommandPalette, HelpDialog,
-                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL), KeyBar (tasti sopra la tastiera)
+                       Sidebar, FileTree (esplora file), BookmarkList (preferiti), UrlDialog (Apri URL), KeyBar (tasti sopra la tastiera), DiffDialog (confronto)
   components/touch.ts  schermo stretto e touch: media query, pressione prolungata, viewport sopra la tastiera virtuale
   components/commands.ts voci dei menu come comandi e ricerca approssimata della palette (+ commands.test.ts)
   shortcuts.ts         elenco delle scorciatoie mostrato in Aiuto
@@ -170,7 +172,6 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 **v1**
 - Window Controls Overlay (tab nella barra del titolo)
 - Strumenti JSON (ordina chiavi, minifica, vista ad albero)
-- Diff tra tab (`@codemirror/merge`)
 - Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)
 - Playground: `import` da npm (esm.sh), controllo dei tipi
 

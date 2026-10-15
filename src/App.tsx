@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { EditorView } from '@codemirror/view'
 import { redo, selectAll, toggleComment, undo } from '@codemirror/commands'
 import { foldAll, unfoldAll } from '@codemirror/language'
@@ -53,6 +53,7 @@ import { renameEntry, type TreeEntry } from './explorer'
 import { bookmarkFor, findDuplicate, useBookmarks } from './bookmarks'
 import { encode, type Encoding } from './encoding'
 import { Workbench, type Doc } from './workbench/Workbench'
+import type { Indent } from './editor/indentation'
 import { diffRange } from './workbench/textDiff'
 import { MenuBar, MobileMenu, type MenuDef, type MenuItem } from './components/Menu'
 import { COARSE_QUERY, COMPACT_QUERY, useMediaQuery, useVisualViewport } from './components/touch'
@@ -65,6 +66,7 @@ import { ConsolePanel } from './components/ConsolePanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { tabColorItems } from './components/tabColorMenu'
 import { CommandPalette } from './components/CommandPalette'
+import { DiffDialog, type DiffSide } from './components/DiffDialog'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
 import { Sidebar } from './components/Sidebar'
@@ -79,6 +81,15 @@ const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
 /** Oltre questa dimensione una risposta JSON non viene formattata (Prettier diventa lento). */
 const MAX_FORMAT_CHARS = 2_000_000
+
+/** Confronto aperto: la tab (modificabile) contro un altro testo */
+interface DiffState {
+  docId: string
+  lang: string | null
+  indent: Indent
+  mine: DiffSide
+  other: DiffSide
+}
 
 type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
@@ -99,7 +110,8 @@ export default function App() {
   const [recents, setRecents] = useState<RecentFile[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [palette, setPalette] = useState<'commands' | 'tabs' | null>(null)
+  const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | null>(null)
+  const [diff, setDiff] = useState<DiffState | null>(null)
   const [help, setHelp] = useState<HelpView | null>(null)
   /** Cartella dell'esplora file; l'anteprima HTML carica da qui CSS, script e immagini referenziati dalla pagina */
   const [folder, setFolderState] = useState<FileSystemDirectoryHandle | null>(null)
@@ -599,6 +611,62 @@ export default function App() {
     v.focus()
   }
 
+  // ---------- confronto ----------
+
+  /** Apre il confronto tra la tab attiva (o `docId`) e un altro testo. */
+  function openDiff(other: DiffSide, docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    if (!doc) return
+    if (!showDoc(doc.id)) return
+    setDiff({ docId: doc.id, lang: doc.lang, indent: doc.indent, mine: { title: doc.name, text: wb.content(doc.id) }, other })
+  }
+
+  /** Confronta con la versione su disco, o con la risposta attuale dell'URL. */
+  async function compareWithSource() {
+    const doc = wb.activeDoc
+    try {
+      if (doc?.handle) {
+        if (!(await ensurePermission(doc.handle, 'read'))) return
+        openDiff({ title: `${doc.name} (su disco)`, text: (await readHandle(doc.handle)).content }, doc.id)
+      } else if (doc?.request) {
+        const got = await download(doc.request)
+        openDiff({ title: `${doc.name} (risposta attuale)`, text: got.text }, doc.id)
+      }
+    } catch (err) {
+      flash(`Impossibile leggere la versione da confrontare: ${(err as Error).message}`)
+    }
+  }
+
+  async function compareWithClipboard() {
+    try {
+      openDiff({ title: 'Appunti', text: await navigator.clipboard.readText() })
+    } catch {
+      flash('Appunti non disponibili')
+    }
+  }
+
+  async function compareWithFile() {
+    try {
+      const [f] = await pickFiles()
+      if (f) openDiff({ title: f.name, text: f.content })
+    } catch (err) {
+      flash(`Errore apertura: ${(err as Error).message}`)
+    }
+  }
+
+  /** Alla chiusura le modifiche fatte nel confronto passano alla tab (annullabili con Ctrl+Z). */
+  function closeDiff(text: string) {
+    const d = diff
+    setDiff(null)
+    if (!d || text === d.mine.text) return
+    if (!wb.doc(d.docId) || wb.content(d.docId) !== d.mine.text) {
+      flash('La tab è cambiata durante il confronto: modifiche del confronto non applicate')
+      return
+    }
+    wb.setText(d.docId, text)
+    flash('Modifiche del confronto applicate alla tab (Ctrl+Z per annullare)')
+  }
+
   // ---------- esecuzione ----------
 
   /**
@@ -850,12 +918,12 @@ export default function App() {
   }, [])
 
   // Impostazioni → editor
+  const editorSettings = useMemo(() => toEditorSettings(settings, systemDark), [settings, systemDark])
   useEffect(() => {
-    const es = toEditorSettings(settings, systemDark)
-    document.documentElement.dataset.theme = es.dark ? 'dark' : 'light'
-    wb.setEditorSettings(es)
+    document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
+    wb.setEditorSettings(editorSettings)
     if (settingsLoaded.current) void saveSettings(settings)
-  }, [wb, settings, systemDark])
+  }, [wb, settings, editorSettings])
 
   const activePane = snap.panes.get(snap.activePaneId)
   const active = snap.docs.get(activePane?.activeDocId ?? '')
@@ -947,6 +1015,18 @@ export default function App() {
         'separator',
         { label: 'Commenta / decommenta', shortcut: 'Ctrl+/', action: () => run(toggleComment) },
         { label: 'Formatta documento', shortcut: 'Shift+Alt+F', disabled: !canFormat(active?.lang), action: () => void formatActive() },
+        'separator',
+        {
+          label: 'Confronta',
+          submenu: [
+            active?.request
+              ? { label: "Con la risposta attuale dell'URL", action: () => void compareWithSource() }
+              : { label: 'Con la versione su disco', disabled: !active?.handle, action: () => void compareWithSource() },
+            { label: "Con un'altra tab…", disabled: snap.docs.size < 2, action: () => setPalette('compare') },
+            { label: 'Con gli appunti', disabled: !active, action: () => void compareWithClipboard() },
+            { label: 'Con un file…', disabled: !active, action: () => void compareWithFile() },
+          ],
+        },
       ],
     },
     {
@@ -1050,8 +1130,17 @@ export default function App() {
       })
   }
 
+  /** Le altre tab, per confrontarle con quella attiva. */
+  const compareItems = (): PaletteItem[] =>
+    [...snap.docs.values()]
+      .filter((d) => d.id !== active?.id)
+      .map((d) => ({ id: d.id, label: d.name, run: () => openDiff({ title: d.name, text: wb.content(d.id) }) }))
+
   /** Voci del menu col tasto destro di una tab che dipendono dall'app. */
   const tabMenuExtra = (doc: Doc): MenuItem[] => [
+    ...(active && doc.id !== active.id
+      ? [{ label: `Confronta con «${active.name}»`, action: () => openDiff({ title: doc.name, text: wb.content(doc.id) }, active.id) }]
+      : []),
     ...(doc.request ? [{ label: "Ricarica dall'URL", action: () => void refreshUrl(doc.id) }] : []),
     { label: 'Aggiungi ai preferiti', disabled: !doc.handle && !doc.request, action: () => bookmarkDoc(doc.id) },
     'separator',
@@ -1213,9 +1302,20 @@ export default function App() {
       {palette && (
         <CommandPalette
           key={palette}
-          items={palette === 'commands' ? menuCommands(menus) : tabItems()}
-          placeholder={palette === 'commands' ? 'Cerca un comando…' : 'Vai a una tab aperta…'}
+          items={palette === 'commands' ? menuCommands(menus) : palette === 'compare' ? compareItems() : tabItems()}
+          placeholder={palette === 'commands' ? 'Cerca un comando…' : palette === 'compare' ? `Confronta «${active?.name ?? ''}» con…` : 'Vai a una tab aperta…'}
           onClose={closeOverlay}
+        />
+      )}
+      {diff && (
+        <DiffDialog
+          other={diff.other}
+          mine={diff.mine}
+          lang={diff.lang}
+          indent={diff.indent}
+          settings={editorSettings}
+          unified={compact}
+          onClose={closeDiff}
         />
       )}
       {help && <HelpDialog view={help} onView={setHelp} onClose={closeOverlay} />}

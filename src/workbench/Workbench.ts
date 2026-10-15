@@ -278,14 +278,24 @@ export class Workbench {
    */
   replaceFromDisk(docId: string, disk: DiskContent) {
     if (!this.docs.has(docId)) return
-    // CodeMirror tiene le righe separate da \n: il confronto va fatto sullo stesso formato
-    const changes = diffRange(this.content(docId), disk.content.replace(/\r\n?/g, '\n'))
-    if (changes) {
-      // annotato come sincronizzazione: non va replicato né deve segnare il documento come modificato
-      for (const p of this.panesWith(docId)) this.dispatchInstance(p.id, docId, { changes, annotations: syncAnnotation.of(true) })
-    }
+    this.replaceText(docId, disk.content)
     this.patchDoc(docId, { dirty: false, eol: disk.eol, encoding: disk.encoding, mtime: disk.mtime })
-    if (changes) this.contentListeners.forEach((fn) => fn(docId))
+  }
+
+  /** Sostituisce il testo (es. dopo un confronto) in tutti i pannelli: il documento risulta modificato, Ctrl+Z lo riporta indietro. */
+  setText(docId: string, text: string) {
+    if (this.docs.has(docId) && this.replaceText(docId, text)) this.patchDoc(docId, { dirty: true })
+  }
+
+  /** Applica la sola parte cambiata a tutte le istanze; false se il testo era già quello. */
+  private replaceText(docId: string, text: string) {
+    // CodeMirror tiene le righe separate da \n: il confronto va fatto sullo stesso formato
+    const changes = diffRange(this.content(docId), text.replace(/\r\n?/g, '\n'))
+    if (!changes) return false
+    // annotato come sincronizzazione: non va replicato (lo stato "modificato" lo decide chi chiama)
+    for (const p of this.panesWith(docId)) this.dispatchInstance(p.id, docId, { changes, annotations: syncAnnotation.of(true) })
+    this.contentListeners.forEach((fn) => fn(docId))
+    return true
   }
 
   setColor(docId: string, color: TabColor | null) {

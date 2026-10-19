@@ -9,7 +9,7 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Menu tradizionale** (File, Modifica, Visualizza, Esegui, Aiuto) con le scorciatoie indicate accanto alle voci.
 - **Palette dei comandi**: `Ctrl+Shift+P` (o `F1`) cerca tra tutte le voci dei menu, `Ctrl+P` passa a una delle tab aperte. La ricerca è approssimata: bastano alcune lettere nell'ordine giusto.
 - **Aiuto** dentro l'app: scorciatoie da tastiera e novità delle versioni, disponibili anche offline.
-- **Pannelli divisi**: affianca o impila più pannelli (Visualizza → Dividi a destra / in basso, oppure i pulsanti a destra della barra delle tab). Ogni pannello ha le sue tab. Lo stesso file aperto in due pannelli resta sincronizzato, ma cursore, scroll, blocchi chiusi e cronologia di annulla sono separati: `Ctrl+Z` annulla solo le modifiche fatte in quel pannello. Le tab si trascinano da un pannello all'altro (con `Ctrl` premuto il file si apre anche nel pannello di arrivo, senza toglierlo da quello di partenza), e dal menu col tasto destro su una tab si apre il file in un nuovo pannello a destra o in basso; i divisori si trascinano per ridimensionare (doppio clic per uniformare).
+- **Pannelli divisi**: affianca o impila più pannelli (Visualizza → Dividi a destra / in basso, oppure i pulsanti a destra della barra delle tab). Ogni pannello ha le sue tab. Lo stesso file aperto in due pannelli resta sincronizzato, ma cursore, scroll, blocchi chiusi e cronologia di annulla sono separati: `Ctrl+Z` annulla solo le modifiche fatte in quel pannello. Le tab si trascinano da un pannello all'altro (con `Ctrl` premuto il file si apre anche nel pannello di arrivo, senza toglierlo da quello di partenza), e dal menu col tasto destro su una tab si apre il file in un nuovo pannello a destra o in basso; i divisori si trascinano per ridimensionare (doppio clic per uniformare). L'icona ⟳ (o Visualizza → Ruota pannello, o il tasto destro su un divisore) passa un pannello e il precedente da affiancati a impilati e viceversa, lasciando gli altri dove sono.
 - **Tab multiple**: la sessione viene salvata in automatico in IndexedDB. Alla riapertura ritrovi pannelli, contenuto, cursore e blocchi chiusi, anche per le tab non salvate su disco.
 - **Tab colorate**: tasto destro su una tab (o Visualizza → Colore tab) per darle un colore. Il colore appartiene al file: se è aperto in più pannelli, tutte le sue tab lo condividono.
 - **File locali**: grazie alla File System Access API, `Ctrl+S` scrive sullo stesso file su disco. C'è anche "Salva con nome". Se nel frattempo il file è stato modificato da un altro programma, prima di sovrascriverlo chiede conferma.
@@ -37,7 +37,9 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Controllo JSON**: gli errori di sintassi sono sottolineati e segnati nel margine.
 - **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown e YAML. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
 - **Confronta** (Modifica → Confronta): la tab contro la versione su disco, un'altra tab, gli appunti o un file, affiancati o in vista unificata, con le differenze evidenziate dentro la riga e le righe uguali piegate. A destra si modifica e le frecce portano i blocchi dall'altro lato; "Ignora formattazione" passa i testi da Prettier per nascondere le differenze di sola formattazione.
-- **Chat AI** (`Ctrl+Alt+I`): domande sulla tab attiva (o sulla parte selezionata) in un pannello a destra, con la propria chiave di OpenRouter, Groq, Google Gemini, OpenAI o Anthropic. I blocchi di codice delle risposte si copiano, si inseriscono nel file o si confrontano con la tab. Le chiavi si impostano in **Impostazioni** (`Ctrl+,`), insieme a tema, font e opzioni del confronto; restano nel browser, in chiaro.
+- **Cronologia locale** (File → Cronologia locale, o il menu della tab): una copia del testo a ogni salvataggio, prima di ogni ricarica dal disco o dall'URL, alla chiusura della tab e ogni 5 minuti se è cambiato. Si sceglie la versione e si apre nel confronto, dove si prendono i blocchi che servono o "Usa tutto l'altro". Fino a 30 versioni per file e 400 in tutto, nel browser.
+- **Riapri tab chiusa** (`Alt+Shift+T`, o File → Riapri tab chiusa): le ultime 20, con il testo non salvato.
+- **Chat AI** (`Ctrl+Alt+I`): domande sulla tab attiva (o sulla parte selezionata) in un pannello a destra, con la propria chiave di OpenRouter, Groq, Google Gemini, OpenAI o Anthropic. I blocchi di codice delle risposte si copiano, si inseriscono nel file o si confrontano con la tab. Le chat si salvano da sole e si riprendono da "Chat precedenti" (ultime 50, con provider e modello di ogni risposta). Le chiavi si impostano in **Impostazioni** (`Ctrl+,`), insieme a tema, font e opzioni del confronto; restano nel browser, in chiaro.
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
 - **Tema** chiaro, scuro o di sistema e dimensione del font, in Impostazioni (`Ctrl+,`); a capo automatico (`Alt+Z`) e ingrandisci / riduci testo anche da Visualizza
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), codifica UTF-8 o Windows-1252. La codifica viene rilevata in apertura: se il file non è UTF-8 valido viene letto come Windows-1252, e il BOM UTF-8 viene rimosso. Il file si salva nella stessa codifica, e dalla barra di stato si può cambiare quella di salvataggio o riaprire il file con un'altra.
@@ -85,6 +87,7 @@ Sui dispositivi touch, a qualunque larghezza:
 | Ripeti la richiesta della tab URL | `F5` |
 | Salva / Salva con nome | `Ctrl+S` / `Ctrl+Shift+S` |
 | Chiudi tab | `Ctrl+W` (nella PWA) / `Alt+W` |
+| Riapri tab chiusa | `Ctrl+Shift+T` (nella PWA) / `Alt+Shift+T` |
 | Dividi a destra (stesso file, scroll separato) | `Ctrl+\` |
 | A capo automatico | `Alt+Z` |
 | Tab successiva / precedente | `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+PgGiù` / `Ctrl+PgSu` |
@@ -155,7 +158,9 @@ src/
   editor/diffStats.ts  righe aggiunte e tolte nel confronto (+ diffStats.test.ts)
   ai/providers.ts      provider AI: client compatibile OpenAI e Anthropic (SDK caricato al primo uso) (+ providers.test.ts)
   ai/context.ts        prompt di sistema con la tab attiva e la selezione (+ context.test.ts)
+  ai/chatHistory.ts    chat salvate in IndexedDB, con provider e modello di ogni risposta (+ chatHistory.test.ts)
   ai/markdown.ts       Markdown delle risposte senza HTML, link pericolosi né immagini esterne (+ markdown.test.ts)
+  history.ts           cronologia locale delle versioni in IndexedDB (+ history.test.ts)
   encoding.ts          lettura e scrittura in UTF-8 / Windows-1252 (+ encoding.test.ts)
 ```
 
@@ -185,7 +190,7 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 - Playground: `import` da npm (esm.sh), controllo dei tipi
 
 **Dopo**
-- Chat AI: risposte in streaming, cronologia salvata, più tab come contesto
+- Chat AI: risposte in streaming, più tab come contesto
 - Modalità Vim
 - Snippet
 - Minimappa

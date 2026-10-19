@@ -18,7 +18,7 @@ import { diffRange } from './textDiff'
 import type { Encoding } from '../encoding'
 import type { UrlRequest, UrlResponse } from '../remote'
 import { saveSession, type Eol, type Session } from '../store'
-import { isValidLayout, leaf, paneIds, removePane, setSizes, splitPane, type Layout, type SplitDir } from './layout'
+import { isValidLayout, leaf, paneIds, removePane, paneLocation, rotatePair, setSizes, splitPane, type Layout, type SplitDir } from './layout'
 
 export interface Doc {
   id: string
@@ -70,6 +70,8 @@ export interface Snapshot {
   layout: Layout
   activePaneId: string
   status: CursorStatus
+  /** tab chiuse che si possono riaprire */
+  closedCount: number
 }
 
 export interface NewDocInput {
@@ -118,6 +120,9 @@ export class Workbench {
   private settings: EditorSettings
   private listeners = new Set<() => void>()
   private contentListeners = new Set<(docId: string) => void>()
+  private closeListeners = new Set<(doc: Doc, content: string) => void>()
+  /** ultime tab chiuse, con il testo: si riaprono con reopenClosed */
+  private closed: Array<{ paneId: string; input: NewDocInput }> = []
   private snapshot!: Snapshot
   private persistTimer?: number
   private detectTimers = new Map<string, number>()
@@ -147,6 +152,12 @@ export class Workbench {
     return () => void this.contentListeners.delete(fn)
   }
 
+  /** Notifica la chiusura di un documento (non più aperto in nessun pannello), col suo ultimo testo. */
+  onDocClosed(fn: (doc: Doc, content: string) => void) {
+    this.closeListeners.add(fn)
+    return () => void this.closeListeners.delete(fn)
+  }
+
   private emit() {
     this.snapshot = {
       docs: new Map(this.docs),
@@ -154,6 +165,7 @@ export class Workbench {
       layout: this.layout,
       activePaneId: this.activePaneId,
       status: this.status,
+      closedCount: this.closed.length,
     }
     this.listeners.forEach((fn) => fn())
   }
@@ -408,6 +420,7 @@ export class Workbench {
     const idx = pane.docIds.indexOf(docId)
     const docIds = pane.docIds.filter((id) => id !== docId)
     const k = instanceKey(paneId, docId)
+    if (lastInstance) this.rememberClosed(paneId, doc, this.states.get(k))
     this.states.delete(k)
     this.scrolls.delete(k)
     if (lastInstance) {
@@ -426,6 +439,31 @@ export class Workbench {
     this.emit()
     this.schedulePersist()
     return true
+  }
+
+  private rememberClosed(paneId: string, doc: Doc, st: EditorState | undefined) {
+    if (!st || this.isBlank(doc.id)) return
+    const content = st.doc.toString()
+    const { id, name, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response } = doc
+    // stesso id: la tab riaperta ritrova la sua cronologia locale
+    const input: NewDocInput = { id, name, content, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response }
+    this.closed = [...this.closed, { paneId, input: { ...input, cursor: st.selection.main.head } }].slice(-20)
+    this.closeListeners.forEach((fn) => fn(doc, content))
+  }
+
+  /** Riapre l'ultima tab chiusa, nel suo pannello se c'è ancora. Se il suo file è già aperto, lo mostra. */
+  async reopenClosed() {
+    const item = this.closed.pop()
+    this.emit()
+    if (!item) return
+    const { handle, request } = item.input
+    const open = (handle && (await this.findByHandle(handle))) || (request && this.findByUrl(request.url))
+    if (open) {
+      const pane = [...this.panes.values()].find((p) => p.docIds.includes(open.id))
+      if (pane) this.activate(pane.id, open.id)
+      return
+    }
+    this.addDoc(item.input, this.panes.has(item.paneId) ? item.paneId : this.activePaneId)
   }
 
   /**
@@ -512,6 +550,19 @@ export class Workbench {
     }
     this.closeTab(fromPaneId, docId, true)
     this.activate(toPaneId, docId)
+  }
+
+  /** Ruota il pannello rispetto al precedente (o al successivo, se è il primo): affiancati ↔ impilati. */
+  rotate(paneId = this.activePaneId) {
+    const at = paneLocation(this.layout, paneId)
+    if (at) this.rotateAt(at.path, Math.max(at.index, 1))
+  }
+
+  /** Ruota la coppia di figli `index - 1` e `index` della divisione al percorso indicato. */
+  rotateAt(path: number[], index: number) {
+    this.layout = rotatePair(this.layout, path, index)
+    this.emit()
+    this.schedulePersist()
   }
 
   resize(path: number[], sizes: number[]) {

@@ -1,5 +1,7 @@
 import { useLayoutEffect, useRef, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react'
 import type { Runner } from '../runner/Runner'
+import type { TabColor } from '../workbench/tabColors'
+import { DocLink } from './DocLink'
 
 interface Props {
   runner: Runner
@@ -9,11 +11,15 @@ interface Props {
   onRun: () => void
   onClose: () => void
   onGoto: (docId: string, line: number) => void
+  /** tab del file che ha prodotto l'output (undefined se chiusa) */
+  sourceDoc: (docId: string) => { name: string; color?: TabColor } | undefined
+  onShowDoc: (docId: string) => void
 }
 
 /** Pannello in basso con l'output dell'ultima esecuzione. */
-export function ConsolePanel({ runner, height, canRun, onResize, onRun, onClose, onGoto }: Props) {
-  const { entries, running, alive } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
+export function ConsolePanel({ runner, height, canRun, onResize, onRun, onClose, onGoto, sourceDoc, onShowDoc }: Props) {
+  const { entries, running, alive, source } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
+  const open = source ? sourceDoc(source.docId) : undefined
   const bodyRef = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
 
@@ -39,6 +45,7 @@ export function ConsolePanel({ runner, height, canRun, onResize, onRun, onClose,
       <div className="gutter console-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
       <header className="panel-bar">
         <span className="panel-title">Console</span>
+        {source && <DocLink name={open?.name ?? source.name} color={open?.color} onShow={open ? () => onShowDoc(source.docId) : undefined} />}
         {running && <span className="console-running">in esecuzione…</span>}
         <div className="spacer" />
         <button onClick={onRun} disabled={!canRun} title="Esegui il file o la selezione (Ctrl+Enter)">▶ Esegui</button>

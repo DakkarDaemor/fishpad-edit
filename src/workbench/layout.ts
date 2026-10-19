@@ -56,6 +56,57 @@ export function removePane(node: Layout, paneId: string): Layout | null {
   return { ...node, children, sizes: sizes.map((s) => s / total) }
 }
 
+/** Fonde nel nodo i figli divisi nella sua stessa direzione (A | (B | C) diventa A | B | C), mantenendo le proporzioni. */
+function absorb(node: Extract<Layout, { kind: 'split' }>): Layout {
+  const children: Layout[] = []
+  const sizes: number[] = []
+  node.children.forEach((c, i) => {
+    if (c.kind === 'split' && c.dir === node.dir) {
+      children.push(...c.children)
+      sizes.push(...c.sizes.map((s) => s * node.sizes[i]))
+    } else {
+      children.push(c)
+      sizes.push(node.sizes[i])
+    }
+  })
+  return { ...node, children, sizes }
+}
+
+const flip = (dir: SplitDir): SplitDir => (dir === 'row' ? 'column' : 'row')
+
+/**
+ * Ruota la coppia di figli `index - 1` e `index` della divisione al percorso indicato: da affiancati a impilati
+ * o viceversa, lasciando dov'erano gli altri figli. Se la divisione ha solo quei due, ruota lei stessa.
+ */
+export function rotatePair(node: Layout, path: number[], index: number): Layout {
+  if (node.kind === 'pane') return node
+  if (path.length > 0) {
+    const [head, ...rest] = path
+    // ruotata, la divisione interna può avere la stessa direzione di questa: lì va fusa
+    return absorb({ ...node, children: node.children.map((c, i) => (i === head ? rotatePair(c, rest, index) : c)) })
+  }
+  if (index < 1 || index >= node.children.length) return node
+  if (node.children.length === 2) return absorb({ ...node, dir: flip(node.dir) })
+  const [a, b] = node.sizes.slice(index - 1, index + 1)
+  const pair = absorb({ kind: 'split', dir: flip(node.dir), children: node.children.slice(index - 1, index + 1), sizes: [a / (a + b), b / (a + b)] })
+  const children = [...node.children]
+  const sizes = [...node.sizes]
+  children.splice(index - 1, 2, pair)
+  sizes.splice(index - 1, 2, a + b)
+  return { ...node, children, sizes }
+}
+
+/** Dove sta il pannello: percorso della divisione che lo contiene e sua posizione lì dentro. null se è l'unico. */
+export function paneLocation(node: Layout, paneId: string, path: number[] = []): { path: number[]; index: number } | null {
+  if (node.kind === 'pane') return null
+  for (let i = 0; i < node.children.length; i++) {
+    if (isLeaf(node.children[i], paneId)) return { path, index: i }
+    const found = paneLocation(node.children[i], paneId, [...path, i])
+    if (found) return found
+  }
+  return null
+}
+
 /** Sostituisce le dimensioni del nodo split indicato dal percorso (indici dei figli a partire dalla radice). */
 export function setSizes(node: Layout, path: number[], sizes: number[]): Layout {
   if (node.kind === 'pane') return node

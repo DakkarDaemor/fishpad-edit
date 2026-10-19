@@ -2,6 +2,17 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 10.0
+
+- Ruota pannello: un pannello e quello che lo precede passano da affiancati a impilati e viceversa, mentre gli altri restano dove sono (con A | B | C, ruotando C si ottiene A | (B sopra C); ruotando di nuovo si torna indietro). Si usa con l'icona ⟳ accanto a quelle di divisione, da Visualizza → Ruota pannello (anche nella palette dei comandi) o col tasto destro su un divisore, che ruota i due pannelli ai suoi lati e può anche renderne uguali le dimensioni. Il primo pannello di una divisione ruota con quello che lo segue.
+- Anteprima e console mostrano a quale tab si riferiscono: il nome del file nella loro barra porta alla tab (col suo colore, se ne ha uno), e la tab ha un segno, un occhio se è in anteprima, `>_` se l'output in console viene da lei. Se la tab della console è stata chiusa, il nome resta tratteggiato.
+- Chiudendo la tab di un file in anteprima si chiude anche l'anteprima (prima restava aperta).
+- Riapri tab chiusa (`Ctrl+Shift+T` nella PWA, `Alt+Shift+T` sempre, o File → Riapri tab chiusa): torna l'ultima tab chiusa, anche con il testo non salvato, nel pannello dov'era. Si ricordano le ultime 20 della sessione. Se nel frattempo il file è stato riaperto, viene solo mostrato.
+- Cronologia locale (File → Cronologia locale…, o dal menu della tab): l'app tiene una copia del testo a ogni salvataggio, prima di ogni ricarica dal disco o dall'URL, alla chiusura della tab e ogni 5 minuti se è cambiato (le copie uguali alla precedente si saltano). Scelta una versione, si apre nel confronto con la tab: si prendono i blocchi che servono, o tutto con il nuovo pulsante "Usa tutto l'altro", e `Ctrl+Z` annulla. Le versioni restano nel browser, fino a 30 per file e 400 in tutto, e seguono il file anche se lo riapri in un'altra tab.
+- Chat AI salvate: ogni conversazione si salva da sola a ogni risposta e si ritrova in "Chat precedenti", nella barra della chat, con la prima domanda, la data, i file su cui è stata fatta e i modelli usati. Un clic la riprende e la si può continuare; × la elimina. "Nuova chat" non cancella più la conversazione in corso. Sotto ogni risposta compaiono provider, modello e ora. Si tengono le ultime 50 chat, nel browser.
+- Confronto: "Usa tutto l'altro" sostituisce il testo della tab con quello a sinistra, per esempio la versione su disco.
+- Con molte tab, la barra scorre da sola fino alla tab mostrata (cambiando tab con `Ctrl+Tab`, la palette o il nome in anteprima e console).
+
 ## 9.0
 
 - Chat AI (Visualizza → Chat AI, `Ctrl+Alt+I`): un pannello a destra dove fare domande sulla tab attiva. Ogni domanda manda il contenuto della tab in quel momento e, se c'è, la parte selezionata, che diventa l'argomento della domanda. Sopra il campo si vede quale tab sta per essere mandata. Le risposte sono formattate, e ogni blocco di codice ha Copia, Inserisci (al cursore o al posto della selezione, annullabile con `Ctrl+Z`) e Confronta, che apre il confronto con la tab per prendere solo i blocchi che servono. Con l'anteprima aperta, in alto si passa da Anteprima a Chat. Sul telefono la chat copre l'editor, come l'anteprima.

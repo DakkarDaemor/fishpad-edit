@@ -1,14 +1,17 @@
-import { Fragment, useRef, type PointerEvent, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { moveDivider, type Layout } from '../workbench/layout'
+import { ContextMenu } from './Menu'
 
 interface Props {
   layout: Layout
   renderPane: (paneId: string) => ReactNode
   onResize: (path: number[], sizes: number[]) => void
+  /** affiancati ↔ impilati, dal tasto destro sul divisore: i due pannelli ai lati del divisore `index` */
+  onRotate: (path: number[], index: number) => void
 }
 
 export function SplitView(props: Props) {
-  return <Node node={props.layout} path={[]} renderPane={props.renderPane} onResize={props.onResize} />
+  return <Node node={props.layout} path={[]} renderPane={props.renderPane} onResize={props.onResize} onRotate={props.onRotate} />
 }
 
 interface NodeProps extends Omit<Props, 'layout'> {
@@ -16,8 +19,9 @@ interface NodeProps extends Omit<Props, 'layout'> {
   path: number[]
 }
 
-function Node({ node, path, renderPane, onResize }: NodeProps) {
+function Node({ node, path, renderPane, onResize, onRotate }: NodeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; index: number } | null>(null)
   if (node.kind === 'pane') return <>{renderPane(node.paneId)}</>
 
   const horizontal = node.dir === 'row'
@@ -57,14 +61,29 @@ function Node({ node, path, renderPane, onResize }: NodeProps) {
               aria-orientation={horizontal ? 'vertical' : 'horizontal'}
               onPointerDown={startDrag(i - 1)}
               onDoubleClick={() => onResize(path, node.sizes.map(() => 1 / node.sizes.length))}
-              title="Trascina per ridimensionare, doppio clic per uniformare"
+              onContextMenu={(e) => {
+                e.preventDefault()
+                setMenu({ x: e.clientX, y: e.clientY, index: i })
+              }}
+              title="Trascina per ridimensionare, doppio clic per uniformare, tasto destro per ruotare"
             />
           )}
           <div className="split-cell" style={{ flex: `${node.sizes[i]} 1 0` }}>
-            <Node node={child} path={[...path, i]} renderPane={renderPane} onResize={onResize} />
+            <Node node={child} path={[...path, i]} renderPane={renderPane} onResize={onResize} onRotate={onRotate} />
           </div>
         </Fragment>
       ))}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: horizontal ? 'Ruota: impila questi due pannelli' : 'Ruota: affianca questi due pannelli', action: () => onRotate(path, menu.index) },
+            { label: 'Dimensioni uguali', action: () => onResize(path, node.sizes.map(() => 1 / node.sizes.length)) },
+          ]}
+        />
+      )}
     </div>
   )
 }

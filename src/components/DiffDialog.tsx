@@ -142,6 +142,13 @@ export function DiffDialog({ other, mine, lang, indent, settings, prefs, onPrefs
     ;(next ? goToNextChunk : goToPreviousChunk)(v)
     v.focus()
   }
+  /** Ripristino completo: la tab prende tutto l'altro testo (alla chiusura, annullabile con Ctrl+Z). */
+  const takeAll = () => {
+    const v = editable.current
+    if (!v) return
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: other.text } })
+    v.focus()
+  }
   const close = () => onClose(mineText.current)
   const actions = useRef({ step, close })
   useEffect(() => {
@@ -172,6 +179,9 @@ export function DiffDialog({ other, mine, lang, indent, settings, prefs, onPrefs
           )}
           <button onClick={() => step(false)} disabled={!count} title="Differenza precedente (Shift+F7)" aria-label="Differenza precedente">↑</button>
           <button onClick={() => step(true)} disabled={!count} title="Differenza successiva (F7)" aria-label="Differenza successiva">↓</button>
+          <button onClick={takeAll} disabled={!count || normalize} title="Sostituisce il testo a destra con quello a sinistra: alla chiusura passa alla tab (Ctrl+Z per annullare)">
+            Usa tutto l'altro
+          </button>
           <div className="spacer" />
           <button className={unified ? undefined : 'current'} onClick={() => onPrefs({ unified: false })}>Affiancato</button>
           <button className={unified ? 'current' : undefined} onClick={() => onPrefs({ unified: true })}>Unificato</button>

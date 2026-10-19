@@ -17,6 +17,8 @@ interface Props {
   tabMenuExtra: (doc: Doc) => MenuItem[]
   /** schermo del telefono: un pannello alla volta, senza dividere; con più pannelli, passa al successivo */
   compact?: { onNextPane?: () => void }
+  /** documenti mostrati nell'anteprima e autori dell'output in console: le loro tab hanno un segno */
+  marks: { preview?: string; console?: string }
 }
 
 interface DraggedTab {
@@ -34,8 +36,9 @@ function tabTitle(d: Doc) {
   return `${d.name} (non salvato su disco)`
 }
 
-export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact }: Props) {
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const tabsRef = useRef<HTMLElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; docId: string } | null>(null)
   const closeTabMenu = useCallback(() => setTabMenu(null), [])
@@ -44,6 +47,11 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
   const touch = useMediaQuery(COARSE_QUERY)
 
   useEffect(() => wb.attachView(pane.id, hostRef.current!), [wb, pane.id])
+
+  // con molte tab la barra scorre: la tab mostrata resta in vista
+  useEffect(() => {
+    tabsRef.current?.querySelector('.tab.current')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [pane.activeDocId])
 
   const onDrop = (e: DragEvent) => {
     if (!isTabDrag(e)) return
@@ -73,7 +81,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
       onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropTarget(false)}
       onDropCapture={onDrop}
     >
-      <nav className="tabs" onDoubleClick={(e) => e.target === e.currentTarget && wb.newUntitled(pane.id)}>
+      <nav className="tabs" ref={tabsRef} onDoubleClick={(e) => e.target === e.currentTarget && wb.newUntitled(pane.id)}>
         {pane.docIds.map((id) => {
           const d = docs.get(id)
           if (!d) return null
@@ -98,6 +106,19 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
               {...longPress((x, y) => setTabMenu({ x, y, docId: id }))}
             >
               <span className="tab-name">{d.name}</span>
+              {marks.preview === id && (
+                <span className="tab-mark" title="Mostrato nell'anteprima" aria-label="in anteprima">
+                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                    <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" />
+                    <circle cx="8" cy="8" r="2" fill="currentColor" />
+                  </svg>
+                </span>
+              )}
+              {marks.console === id && marks.preview !== id && (
+                <span className="tab-mark console-mark" title="L'output in console viene da questo file" aria-label="in console">
+                  &gt;_
+                </span>
+              )}
               <button
                 className={`tab-close${d.dirty ? ' dirty' : ''}`}
                 aria-label={`Chiudi ${d.name}`}
@@ -141,6 +162,20 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
                   <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
                 </svg>
               </button>
+              {multiPane && (
+                <button
+                  onClick={() => wb.rotate(pane.id)}
+                  title="Ruota rispetto al pannello precedente: da affiancati a impilati e viceversa"
+                  aria-label="Ruota pannello"
+                >
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor">
+                    <path d="M13 6.5A5.5 5.5 0 0 0 3.2 4.5" />
+                    <path d="M3 9.5a5.5 5.5 0 0 0 9.8 2" />
+                    <path d="M3 1.8v3h3" />
+                    <path d="M13 14.2v-3h-3" />
+                  </svg>
+                </button>
+              )}
             </>
           )}
           {multiPane && (

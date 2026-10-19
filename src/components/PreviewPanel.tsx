@@ -1,11 +1,16 @@
 import { useCallback, useSyncExternalStore, type ReactNode } from 'react'
 import type { Runner } from '../runner/Runner'
 import { useSideResize } from './sideResize'
+import { DocLink } from './DocLink'
+import type { TabColor } from '../workbench/tabColors'
 
 interface Props {
   runner: Runner
-  /** nome attuale del documento (cambia con Salva con nome); se chiuso resta quello dell'avvio */
+  /** nome attuale del documento (cambia con Salva con nome) */
   docName?: string
+  docColor?: TabColor
+  /** porta alla tab del documento in anteprima */
+  onShowDoc: () => void
   width: number
   consoleOpen: boolean
   onResize: (width: number) => void
@@ -20,7 +25,7 @@ interface Props {
 }
 
 /** Pannello a destra con la pagina HTML o il componente React del documento in anteprima. */
-export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, onReload, onToggleConsole, overlay, tabs, hidden }: Props) {
+export function PreviewPanel({ runner, docName, docColor, onShowDoc, width, consoleOpen, onResize, onReload, onToggleConsole, overlay, tabs, hidden }: Props) {
   const { preview, alive, entries } = useSyncExternalStore(runner.subscribe, runner.getSnapshot)
   const errors = entries.filter((e) => e.level === 'error').length
   const host = useCallback((el: HTMLDivElement | null) => runner.setPreviewHost(el), [runner])
@@ -39,7 +44,7 @@ export function PreviewPanel({ runner, docName, width, consoleOpen, onResize, on
             <button onClick={overlay.onHide} title="Torna all'editor (l'anteprima resta aperta)">‹ Editor</button>
           )}
           {tabs ?? <span className="panel-title">Anteprima</span>}
-          <span className="preview-name" title={name}>{name}</span>
+          <DocLink name={name} color={docColor} onShow={onShowDoc} />
           <div className="spacer" />
           <button onClick={onReload} title="Ricarica (Ctrl+Enter)">↻ Ricarica</button>
           <button onClick={() => runner.stop()} disabled={!alive} title="Ferma la pagina (si riavvia alla prossima modifica)">■ Stop</button>

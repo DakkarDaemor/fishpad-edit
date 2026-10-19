@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createClient, usableProviders, type ChatMessage } from '../ai/providers'
+import { createClient, usableProviders } from '../ai/providers'
+import { deleteChat, listChats, loadChat, saveChat, type ChatEntry, type ChatSummary } from '../ai/chatHistory'
 import { buildSystemPrompt, contextLabel, type TabContext } from '../ai/context'
 import { chatBlocks } from '../ai/markdown'
 import type { AiSettings } from '../store'
@@ -25,16 +26,17 @@ interface Props {
   hidden?: boolean
 }
 
-interface Entry extends ChatMessage {
-  /** per le domande: su cosa è stata fatta */
-  context?: string
-}
-
 const SEP = '\u0000'
+/** fuori dal componente: si chiama solo all'arrivo di una risposta, non durante il render */
+const now = () => Date.now()
 
 /** Chat a destra: ogni domanda porta con sé la tab attiva (e la selezione) in quel momento. */
 export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare, onOpenSettings, onClose, width, onResize, overlay, tabs, hidden }: Props) {
-  const [entries, setEntries] = useState<Entry[]>([])
+  const [entries, setEntries] = useState<ChatEntry[]>([])
+  /** la conversazione si salva a ogni risposta con questo id */
+  const [chatId, setChatId] = useState<string>(() => crypto.randomUUID())
+  /** lista delle chat salvate, mostrata al posto della conversazione (null = nascosta) */
+  const [past, setPast] = useState<ChatSummary[] | null>(null)
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState<AbortController | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -71,7 +73,9 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
     try {
       const messages = history.map(({ role, content }) => ({ role, content }))
       const reply = await createClient(chosen.provider).chat(chosen.model, built.system, messages, ac.signal)
-      setEntries((e) => [...e, { role: 'assistant', content: reply }])
+      const next = [...history, { role: 'assistant' as const, content: reply, provider: chosen.provider.name, model: chosen.model, time: now() }]
+      setEntries(next)
+      void saveChat({ id: chatId, entries: next })
     } catch (err) {
       // la domanda torna nel campo, così si può riprovare o cambiare modello
       setEntries((e) => e.slice(0, -1))
@@ -82,6 +86,31 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
     }
   }
 
+  function newChat() {
+    setEntries([])
+    setChatId(crypto.randomUUID())
+    setError(null)
+    setPast(null)
+  }
+
+  async function openChat(id: string) {
+    const chat = await loadChat(id)
+    if (!chat) {
+      setError('Chat non più disponibile')
+      return
+    }
+    setEntries(chat.entries)
+    setChatId(chat.id)
+    setError(null)
+    setPast(null)
+  }
+
+  async function removeChat(id: string) {
+    await deleteChat(id)
+    if (id === chatId) newChat()
+    setPast(await listChats())
+  }
+
   return (
     <>
       {!overlay && !hidden && <div className="gutter preview-gutter" {...resize} />}
@@ -90,13 +119,40 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
           {overlay && <button onClick={overlay.onHide} title="Torna all'editor (la chat resta aperta)">‹ Editor</button>}
           {tabs ?? <span className="panel-title">Chat</span>}
           <div className="spacer" />
-          <button onClick={() => setEntries([])} disabled={!entries.length || !!busy} title="Ricomincia da capo">
+          <button
+            className={past ? 'current' : undefined}
+            onClick={async () => setPast(past ? null : await listChats())}
+            disabled={!!busy}
+            title="Le chat salvate in questo browser"
+          >
+            Chat precedenti
+          </button>
+          <button onClick={newChat} disabled={(!entries.length && !past) || !!busy} title="Ricomincia da capo (la chat attuale resta tra le precedenti)">
             Nuova chat
           </button>
           <button className="panel-close" onClick={onClose} title="Chiudi la chat">×</button>
         </header>
 
-        {options.length === 0 ? (
+        {past ? (
+          <div className="chat-list">
+            {!past.length && <p className="chat-hint">Nessuna chat salvata. Le chat si salvano da sole a ogni risposta.</p>}
+            {past.map((c) => (
+              <div key={c.id} className={`chat-past${c.id === chatId ? ' current' : ''}`}>
+                <button className="chat-past-open" onClick={() => void openChat(c.id)} title="Riprendi questa chat">
+                  <span className="chat-past-title">{c.title}</span>
+                  <span className="chat-context">
+                    {new Date(c.updated).toLocaleString('it-IT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {c.files.length > 0 && ` · ${c.files.join(', ')}`}
+                  </span>
+                  {c.models.length > 0 && <span className="chat-context">{c.models.join(', ')}</span>}
+                </button>
+                <button className="chat-past-delete" onClick={() => void removeChat(c.id)} aria-label={`Elimina la chat "${c.title}"`} title="Elimina">
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : options.length === 0 ? (
           <div className="chat-empty">
             <p>Per usare la chat serve la chiave di almeno un provider, con un modello scelto.</p>
             <p>OpenRouter, Groq e Google Gemini hanno un piano gratuito.</p>
@@ -113,7 +169,7 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
                     {e.content}
                   </div>
                 ) : (
-                  <Answer key={i} text={e.content} onInsert={onInsert} onCompare={onCompare} />
+                  <Answer key={i} entry={e} onInsert={onInsert} onCompare={onCompare} />
                 ),
               )}
               {busy && <div className="chat-msg busy">Sto scrivendo…</div>}
@@ -167,8 +223,8 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
 }
 
 /** Risposta del modello: Markdown reso innocuo, con i pulsanti sui blocchi di codice. */
-function Answer({ text, onInsert, onCompare }: { text: string; onInsert: (code: string) => void; onCompare: (code: string) => void }) {
-  const blocks = useMemo(() => chatBlocks(text), [text])
+function Answer({ entry, onInsert, onCompare }: { entry: ChatEntry; onInsert: (code: string) => void; onCompare: (code: string) => void }) {
+  const blocks = useMemo(() => chatBlocks(entry.content), [entry.content])
   return (
     <div className="chat-msg assistant">
       {blocks.map((b, i) =>
@@ -188,6 +244,12 @@ function Answer({ text, onInsert, onCompare }: { text: string; onInsert: (code: 
             </pre>
           </div>
         ),
+      )}
+      {entry.model && (
+        <div className="chat-meta">
+          {entry.provider} · {entry.model}
+          {entry.time && ` · ${new Date(entry.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`}
+        </div>
       )}
     </div>
   )

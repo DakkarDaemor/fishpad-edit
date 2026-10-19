@@ -26,6 +26,8 @@ export interface RunnerSnapshot {
   alive: boolean
   /** Documento mostrato nel pannello Anteprima (resta anche dopo Stop, finché non si chiude il pannello) */
   preview: PreviewInfo | null
+  /** Documento dell'ultima esecuzione, a cui si riferisce l'output in console (null dopo Pulisci) */
+  source: PreviewInfo | null
 }
 
 export interface RunRequest {
@@ -61,7 +63,8 @@ export class Runner {
   private generation = 0
   private nextId = 1
   private listeners = new Set<() => void>()
-  private snapshot: RunnerSnapshot = { entries: [], running: false, alive: false, preview: null }
+  private snapshot: RunnerSnapshot = { entries: [], running: false, alive: false, preview: null, source: null }
+  private source: PreviewInfo | null = null
 
   constructor() {
     window.addEventListener('message', this.onMessage)
@@ -79,6 +82,7 @@ export class Runner {
       running: this.running,
       alive: !!this.frame || this.running,
       preview: this.preview,
+      source: this.source,
     }
     this.listeners.forEach((fn) => fn())
   }
@@ -93,6 +97,7 @@ export class Runner {
     this.teardown()
     const gen = ++this.generation
     this.running = true
+    this.source = { docId: req.docId, name: req.name }
     if (target === 'preview') {
       // l'anteprima si riesegue a ogni modifica: la console mostra solo l'ultima versione
       this.entries = []
@@ -173,6 +178,7 @@ export class Runner {
 
   clear() {
     this.entries = []
+    this.source = null
     this.emit()
   }
 

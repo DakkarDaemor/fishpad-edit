@@ -70,6 +70,7 @@ import { DiffDialog, type DiffSide } from './components/DiffDialog'
 import { ChatPanel } from './components/ChatPanel'
 import { SettingsDialog, type SettingsView } from './components/SettingsDialog'
 import { contextLabel, type TabContext } from './ai/context'
+import { addVersion, listVersions, readVersion, sizeLabel, versionLabel } from './history'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
 import { Sidebar } from './components/Sidebar'
@@ -113,7 +114,9 @@ export default function App() {
   const [recents, setRecents] = useState<RecentFile[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | null>(null)
+  const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | 'history' | null>(null)
+  /** versioni della cronologia locale mostrate nella palette */
+  const [historyItems, setHistoryItems] = useState<{ docName: string; items: PaletteItem[] } | null>(null)
   const [diff, setDiff] = useState<DiffState | null>(null)
   const [settingsView, setSettingsView] = useState<SettingsView | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
@@ -263,6 +266,7 @@ export default function App() {
         const mtime = await writeHandle(doc.handle, data)
         wb.patchDoc(doc.id, { dirty: false, mtime })
         keptOverDisk.current.delete(doc.id)
+        void addVersion(doc, wb.content(doc.id), 'salvato')
         flash(`Salvato: ${doc.name}`)
         return
       }
@@ -280,6 +284,7 @@ export default function App() {
         const byName = detectByFilename(handle.name)
         if (byName && byName !== doc.lang) void wb.setLanguage(doc.id, byName, false)
         else if (byName) wb.patchDoc(doc.id, { langAuto: false })
+        void addVersion(wb.doc(doc.id) ?? doc, wb.content(doc.id), 'salvato')
         flash(`Salvato: ${handle.name}`)
       } else {
         wb.patchDoc(doc.id, { dirty: false })
@@ -323,7 +328,9 @@ export default function App() {
     if (doc.dirty && !confirm(`Scartare le modifiche a "${doc.name}" e ricaricarlo dal disco?`)) return
     try {
       if (!(await ensurePermission(doc.handle, 'read'))) return
-      wb.replaceFromDisk(doc.id, await readHandle(doc.handle, encoding))
+      const disk = await readHandle(doc.handle, encoding)
+      void addVersion(doc, wb.content(doc.id), 'prima di ricaricare')
+      wb.replaceFromDisk(doc.id, disk)
       keptOverDisk.current.delete(doc.id)
       flash(`Ricaricato: ${doc.name}`)
     } catch {
@@ -352,7 +359,9 @@ export default function App() {
           const msg = `"${doc.name}" è stato modificato da un altro programma, e qui ha modifiche non salvate.\n\nRicaricarlo dal disco perdendo le modifiche?`
           if (!confirm(msg)) continue
         }
-        wb.replaceFromDisk(id, await readHandle(doc.handle))
+        const disk = await readHandle(doc.handle)
+        void addVersion(doc, wb.content(id), 'prima di ricaricare')
+        wb.replaceFromDisk(id, disk)
         keptOverDisk.current.delete(id)
         flash(`Ricaricato dal disco: ${doc.name}`)
       }
@@ -429,6 +438,7 @@ export default function App() {
       const got = await download(doc.request)
       // nel frattempo la tab può essere stata chiusa o salvata su disco
       if (wb.doc(doc.id)?.request?.url !== url) return
+      void addVersion(doc, wb.content(doc.id), 'prima di ricaricare')
       wb.replaceFromDisk(doc.id, { content: got.text, eol: detectEol(got.text), encoding: 'utf-8' })
       wb.patchDoc(doc.id, { response: got.response })
       const { status, statusText, ms } = got.response
@@ -674,6 +684,31 @@ export default function App() {
     flash('Modifiche del confronto applicate alla tab (Ctrl+Z per annullare)')
   }
 
+  // ---------- cronologia locale ----------
+
+  /** Versioni salvate del documento nella palette: scelta una, si apre nel confronto con la tab. */
+  async function openHistory(docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    if (!doc) return
+    const versions = await listVersions(doc)
+    if (!versions.length) {
+      flash(`Nessuna versione salvata di "${doc.name}"`)
+      return
+    }
+    const items = versions.map((v) => ({
+      id: v.id,
+      label: versionLabel(v),
+      detail: [v.name !== doc.name ? v.name : '', sizeLabel(v.size)].filter(Boolean).join(' · '),
+      run: async () => {
+        const text = await readVersion(v)
+        if (text === null) flash('Versione non più disponibile')
+        else openDiff({ title: `${v.name} (${versionLabel(v)})`, text }, doc.id)
+      },
+    }))
+    setHistoryItems({ docName: doc.name, items })
+    setPalette('history')
+  }
+
   // ---------- chat ----------
 
   /** La tab attiva e la sua selezione, da mandare con la domanda. */
@@ -777,6 +812,13 @@ export default function App() {
     void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
   }
 
+  /** Dal nome del file in Anteprima o Console alla sua tab (sul telefono l'anteprima copre l'editor). */
+  function showFromPanel(docId: string) {
+    setPreviewHidden(true)
+    showDoc(docId)
+    wb.activeView?.focus()
+  }
+
   function gotoDocLine(docId: string, line: number) {
     // sul telefono l'anteprima copre l'editor
     setPreviewHidden(true)
@@ -858,6 +900,7 @@ export default function App() {
       else if (mod && !e.altKey && code === 'KeyO') void a.openDialog()
       else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyN') wb.newUntitled()
       else if ((mod || e.altKey) && !e.shiftKey && code === 'KeyW') a.closeActiveTab()
+      else if ((mod || e.altKey) && e.shiftKey && code === 'KeyT') void wb.reopenClosed()
       else if (e.ctrlKey && e.key === 'Tab') wb.cycleTab(e.shiftKey ? -1 : 1)
       else if (e.ctrlKey && e.key === 'PageDown') wb.cycleTab(1)
       else if (e.ctrlKey && e.key === 'PageUp') wb.cycleTab(-1)
@@ -949,6 +992,31 @@ export default function App() {
       clearTimeout(timer)
     }
   }, [wb, runner, folder])
+
+  // Cronologia locale: il testo alla chiusura di una tab, e ogni 5 minuti quello delle tab cambiate
+  useEffect(() => {
+    const changed = new Set<string>()
+    const offClose = wb.onDocClosed((doc, content) => void addVersion(doc, content, 'alla chiusura'))
+    const offChange = wb.onContentChange((id) => changed.add(id))
+    const timer = window.setInterval(() => {
+      for (const id of changed) {
+        const doc = wb.doc(id)
+        if (doc) void addVersion(doc, wb.content(id), 'automatica')
+      }
+      changed.clear()
+    }, 5 * 60_000)
+    return () => {
+      offClose()
+      offChange()
+      clearInterval(timer)
+    }
+  }, [wb])
+
+  // Chiusa la tab del documento in anteprima, si chiude anche l'anteprima
+  const previewDocId = runState.preview?.docId
+  useEffect(() => {
+    if (previewDocId && !snap.docs.has(previewDocId)) runner.closePreview()
+  }, [runner, previewDocId, snap.docs])
 
   // Dispositivi touch: l'app sta sopra la tastiera virtuale, e mostrare una tab non apre la tastiera
   useVisualViewport(touch)
@@ -1058,6 +1126,7 @@ export default function App() {
               ]
             : [],
         },
+        { label: 'Cronologia locale…', disabled: !active, action: () => void openHistory() },
         'separator',
         { label: 'Salva', shortcut: 'Ctrl+S', disabled: !active, action: () => void save() },
         { label: 'Salva con nome…', shortcut: 'Ctrl+Shift+S', disabled: !active, action: () => void save(undefined, true) },
@@ -1069,6 +1138,7 @@ export default function App() {
           : { label: 'Ricarica dal disco', disabled: !active?.handle, action: () => void reload() },
         'separator',
         { label: 'Chiudi tab', shortcut: 'Alt+W', action: closeActiveTab },
+        { label: 'Riapri tab chiusa', shortcut: 'Alt+Shift+T', disabled: !snap.closedCount, action: () => void wb.reopenClosed() },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
         ...(hasFolderAccess ? [{ label: 'Chiudi cartella', disabled: !folder, action: () => setFolder(null) }] : []),
       ],
@@ -1114,6 +1184,7 @@ export default function App() {
         // sullo schermo del telefono si vede un pannello alla volta
         { label: 'Dividi a destra', shortcut: 'Ctrl+\\', disabled: compact, action: () => void wb.split('row') },
         { label: 'Dividi in basso', disabled: compact, action: () => void wb.split('column') },
+        { label: 'Ruota pannello (rispetto al precedente)', disabled: compact || !multiPane, action: () => wb.rotate() },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
         'separator',
         {
@@ -1206,6 +1277,7 @@ export default function App() {
 
   /** Voci del menu col tasto destro di una tab che dipendono dall'app. */
   const tabMenuExtra = (doc: Doc): MenuItem[] => [
+    { label: 'Cronologia locale…', action: () => void openHistory(doc.id) },
     ...(active && doc.id !== active.id
       ? [{ label: `Confronta con «${active.name}»`, action: () => openDiff({ title: doc.name, text: wb.content(doc.id) }, active.id) }]
       : []),
@@ -1232,6 +1304,7 @@ export default function App() {
         multiPane={multiPane}
         tabMenuExtra={tabMenuExtra}
         compact={compact ? { onNextPane: multiPane ? nextPane : undefined } : undefined}
+        marks={{ preview: runState.preview?.docId, console: runState.source?.docId }}
       />
     ) : null
   }
@@ -1320,11 +1393,13 @@ export default function App() {
         {compact ? (
           renderPane(snap.activePaneId)
         ) : (
-          <SplitView layout={snap.layout} onResize={(path, sizes) => wb.resize(path, sizes)} renderPane={renderPane} />
+          <SplitView layout={snap.layout} onResize={(path, sizes) => wb.resize(path, sizes)} onRotate={(path, index) => wb.rotateAt(path, index)} renderPane={renderPane} />
         )}
         <PreviewPanel
           runner={runner}
           docName={runState.preview ? snap.docs.get(runState.preview.docId)?.name : undefined}
+          docColor={runState.preview ? snap.docs.get(runState.preview.docId)?.color : undefined}
+          onShowDoc={() => runState.preview && showFromPanel(runState.preview.docId)}
           width={previewWidth}
           consoleOpen={consoleOpen}
           onResize={setPreviewWidth}
@@ -1368,6 +1443,8 @@ export default function App() {
             wb.activeView?.focus()
           }}
           onGoto={gotoDocLine}
+          sourceDoc={(id) => snap.docs.get(id)}
+          onShowDoc={showFromPanel}
         />
       )}
 
@@ -1395,8 +1472,8 @@ export default function App() {
       {palette && (
         <CommandPalette
           key={palette}
-          items={palette === 'commands' ? menuCommands(menus) : palette === 'compare' ? compareItems() : tabItems()}
-          placeholder={palette === 'commands' ? 'Cerca un comando…' : palette === 'compare' ? `Confronta «${active?.name ?? ''}» con…` : 'Vai a una tab aperta…'}
+          items={palette === 'commands' ? menuCommands(menus) : palette === 'compare' ? compareItems() : palette === 'history' ? (historyItems?.items ?? []) : tabItems()}
+          placeholder={palette === 'commands' ? 'Cerca un comando…' : palette === 'compare' ? `Confronta «${active?.name ?? ''}» con…` : palette === 'history' ? `Versioni di «${historyItems?.docName ?? ''}»: scegli quella da confrontare` : 'Vai a una tab aperta…'}
           onClose={closeOverlay}
         />
       )}

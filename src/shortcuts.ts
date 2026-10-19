@@ -8,6 +8,7 @@ export const SHORTCUTS: Array<[string, string]> = [
   ['Ripeti la richiesta della tab URL', 'F5'],
   ['Salva / Salva con nome', 'Ctrl+S / Ctrl+Shift+S'],
   ['Chiudi tab', 'Ctrl+W (nella PWA) / Alt+W'],
+  ['Riapri tab chiusa', 'Ctrl+Shift+T (nella PWA) / Alt+Shift+T'],
   ['Dividi a destra (stesso file, scroll separato)', 'Ctrl+\\'],
   ['A capo automatico', 'Alt+Z'],
   ['Tab successiva / precedente', 'Ctrl+Tab / Ctrl+Shift+Tab, Ctrl+PgGiù / Ctrl+PgSu'],

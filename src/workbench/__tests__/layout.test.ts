@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidLayout, leaf, moveDivider, paneIds, removePane, splitPane, type Layout } from '../layout'
+import { isValidLayout, leaf, moveDivider, paneIds, paneLocation, removePane, rotatePair, splitPane, type Layout } from '../layout'
 
 describe('splitPane', () => {
   it('trasforma una foglia in una divisione a metà', () => {
@@ -58,5 +58,42 @@ describe('isValidLayout', () => {
     expect(isValidLayout(l, new Set(['a', 'b']))).toBe(true)
     expect(isValidLayout(l, new Set(['a']))).toBe(false)
     expect(isValidLayout({ kind: 'split', dir: 'row', children: [leaf('a')], sizes: [1] }, new Set(['a']))).toBe(false)
+  })
+})
+
+describe('rotatePair', () => {
+  const row3: Layout = { kind: 'split', dir: 'row', sizes: [0.5, 0.25, 0.25], children: [leaf('a'), leaf('b'), leaf('c')] }
+
+  it('ruota solo la coppia, gli altri pannelli restano dove sono', () => {
+    expect(rotatePair(row3, [], 2)).toEqual({
+      kind: 'split',
+      dir: 'row',
+      sizes: [0.5, 0.5],
+      children: [leaf('a'), { kind: 'split', dir: 'column', sizes: [0.5, 0.5], children: [leaf('b'), leaf('c')] }],
+    })
+    expect(rotatePair(row3, [], 1)).toMatchObject({ dir: 'row', sizes: [0.75, 0.25], children: [{ dir: 'column', children: [leaf('a'), leaf('b')] }, leaf('c')] })
+  })
+
+  it('ruotare di nuovo la stessa coppia torna indietro', () => {
+    const once = rotatePair(row3, [], 2)
+    expect(rotatePair(once, [1], 1)).toEqual(row3)
+  })
+
+  it('con due soli pannelli ruota la divisione', () => {
+    expect(rotatePair(splitPane(leaf('a'), 'a', 'b', 'row'), [], 1)).toMatchObject({ kind: 'split', dir: 'column', sizes: [0.5, 0.5] })
+  })
+
+  it('indice fuori dalla divisione: niente', () => {
+    expect(rotatePair(row3, [], 0)).toBe(row3)
+    expect(rotatePair(leaf('a'), [], 1)).toEqual(leaf('a'))
+  })
+})
+
+describe('paneLocation', () => {
+  const l = splitPane(splitPane(leaf('a'), 'a', 'b', 'row'), 'b', 'c', 'column')
+  it('trova la divisione che contiene il pannello e la sua posizione', () => {
+    expect(paneLocation(l, 'a')).toEqual({ path: [], index: 0 })
+    expect(paneLocation(l, 'c')).toEqual({ path: [1], index: 1 })
+    expect(paneLocation(leaf('a'), 'a')).toBeNull()
   })
 })

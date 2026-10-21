@@ -169,6 +169,10 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .pane-actions button:hover { color: var(--fg); }
 
 /* Editor */
+/* Tipo sotto il mouse e firma dei suggerimenti in TypeScript (typeLint.ts) */
+.cm-type-info { max-width: 560px; padding: 4px 8px; }
+.cm-type-info code { display: block; font: 12px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cm-type-info p { margin: 6px 0 0; white-space: pre-wrap; color: var(--fg-muted); }
 .editor { flex: 1; min-height: 0; overflow: hidden; background: var(--bg-editor); }
 .editor .cm-editor { height: 100%; }
 .editor .cm-editor.cm-focused { outline: none; }
@@ -465,6 +469,21 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--f
   font-weight: 600; border-bottom: 1px solid var(--border);
 }
 .title-action { display: inline-grid; place-items: center; min-width: 32px; height: 28px; padding: 0 8px; }
+
+/* PWA installata con la barra del titolo nascosta (Window Controls Overlay): la barra dell'app ne prende il posto,
+   lasciando liberi i pulsanti della finestra; lo spazio vuoto trascina la finestra */
+@media (display-mode: window-controls-overlay) {
+  .titlebar {
+    -webkit-app-region: drag; app-region: drag;
+    height: env(titlebar-area-height, 33px); min-height: 0; padding-top: 0; padding-bottom: 0;
+    padding-left: calc(env(titlebar-area-x, 0px) + 8px);
+    padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 8px);
+  }
+  .titlebar button, .titlebar .tabs, .titlebar .menu-panel { -webkit-app-region: no-drag; app-region: no-drag; }
+  .title-tabs { display: flex; align-self: stretch; min-width: 0; flex: 0 1 auto; }
+  .title-tabs .tabs { min-width: 0; min-height: 0; border-bottom: 0; }
+  .title-tabs .tabs > .spacer { display: none; }
+}
 
 /* Schermo stretto (telefono) */
 @media (max-width: 700px) {

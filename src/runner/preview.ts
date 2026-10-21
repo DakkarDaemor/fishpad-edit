@@ -1,6 +1,7 @@
 import { loadMarked } from '../markdown'
 import { reactVendorScript } from './react-vendor'
 import { bridgeSource, linesBefore } from './sandbox'
+import { CompileError } from './transpile'
 
 /**
  * Documenti (srcdoc) del pannello Anteprima. Il codice gira nell'iframe stesso, con il bridge
@@ -49,12 +50,108 @@ export async function markdownDocument(md: string): Promise<string> {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${MARKDOWN_STYLE}</style></head><body>${body}</body></html>`
 }
 
+const JSON_STYLE = `
+:root { color-scheme: light dark; --key: #0451a5; --str: #a31515; --num: #098658; --lit: #0000ff; --muted: #888; }
+@media (prefers-color-scheme: dark) { :root { --key: #9cdcfe; --str: #ce9178; --num: #b5cea8; --lit: #569cd6; } }
+body { margin: 0; padding: 12px 16px; font: 13px/1.6 ui-monospace, 'Cascadia Code', Consolas, monospace; }
+details > :not(summary), .more { margin-left: 1.25em; }
+summary { cursor: pointer; }
+.leaf { padding-left: 1.25em; overflow-wrap: anywhere; }
+.k { color: var(--key); }
+.i { color: var(--muted); }
+.k, .i { cursor: pointer; }
+.k:hover, .i:hover { text-decoration: underline; }
+.str { color: var(--str); }
+.num { color: var(--num); }
+.lit { color: var(--lit); }
+.meta { color: var(--muted); }
+.more { font: inherit; margin-top: 2px; }
+`
+
+// Gira nell'iframe: costruisce i figli di un nodo solo quando lo si apre, così anche i file grandi restano leggeri.
+// I numeri tengono il testo del file (source nel reviver), quindi quelli grandi non vengono arrotondati.
+// Un clic sulla chiave manda il percorso all'editor, che va alla riga (vedi jsonPath.ts); la freccia apre e chiude.
+const JSON_TREE = `
+const Num = class { constructor(s) { this.s = s; } };
+const data = JSON.parse(document.getElementById('data').textContent, (k, v, ctx) => typeof v === 'number' ? new Num(ctx?.source ?? String(v)) : v);
+const PAGE = 500;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const isBranch = (v) => v !== null && typeof v === 'object' && !(v instanceof Num);
+function label(parent, path, isIndex) {
+  if (!path.length) return;
+  const key = path[path.length - 1];
+  const k = el('span', isIndex ? 'i' : 'k', isIndex ? String(key) : JSON.stringify(key));
+  k.title = 'Vai alla riga nel file';
+  k.onclick = (e) => { e.preventDefault(); self.__fishpadBridge?.send({ kind: 'goto', path }); };
+  parent.append(k, ': ');
+}
+function leaf(v) {
+  if (v instanceof Num) return el('span', 'num', v.s);
+  if (typeof v === 'string') return el('span', 'str', JSON.stringify(v));
+  return el('span', 'lit', String(v));
+}
+function node(v, path, isIndex) {
+  if (!isBranch(v)) { const d = el('div', 'leaf'); label(d, path, isIndex); d.append(leaf(v)); return d; }
+  const arr = Array.isArray(v);
+  const entries = arr ? v.map((x, i) => [i, x]) : Object.entries(v);
+  const n = entries.length;
+  const meta = arr ? '[' + n + (n === 1 ? ' elemento' : ' elementi') + ']' : '{' + n + (n === 1 ? ' chiave' : ' chiavi') + '}';
+  if (!n) { const d = el('div', 'leaf'); label(d, path, isIndex); d.append(el('span', 'meta', arr ? '[]' : '{}')); return d; }
+  const det = el('details');
+  const sum = el('summary');
+  label(sum, path, isIndex);
+  sum.append(el('span', 'meta', meta));
+  det.append(sum);
+  let shown = 0;
+  const more = () => {
+    const end = Math.min(n, shown + PAGE);
+    const frag = document.createDocumentFragment();
+    for (; shown < end; shown++) frag.append(node(entries[shown][1], [...path, entries[shown][0]], arr));
+    det.querySelector(':scope > .more')?.remove();
+    det.append(frag);
+    if (shown < n) {
+      const b = el('button', 'more', 'Mostra altri ' + Math.min(PAGE, n - shown) + ' (di ' + (n - shown) + ')');
+      b.onclick = more;
+      det.append(b);
+    }
+  };
+  det.addEventListener('toggle', () => { if (det.open && !shown) more(); });
+  if (path.length < 2) { more(); det.open = true; }
+  return det;
+}
+document.body.append(node(data, [], false));
+`
+
+/** Riga dell'errore nel messaggio di JSON.parse: "line N" (Firefox, Chrome recenti) o "position N". */
+function jsonErrorLine(message: string, text: string): number | undefined {
+  const line = /line (\d+)/.exec(message)
+  if (line) return +line[1]
+  const pos = /position (\d+)/.exec(message)
+  return pos ? text.slice(0, +pos[1]).split('\n').length : undefined
+}
+
+/** Pagina con il JSON come albero da aprire e chiudere. Se il JSON non è valido lancia CompileError con la riga. */
+export function jsonDocument(text: string): string {
+  try {
+    JSON.parse(text)
+  } catch (err) {
+    const message = (err as Error).message
+    throw new CompileError(message, jsonErrorLine(message, text))
+  }
+  // fuori dalle stringhe `<` non può esserci: \u003c dentro le stringhe è lo stesso carattere e non chiude lo <script>
+  const data = text.replace(/</g, '\\u003c')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${JSON_STYLE}</style></head><body>
+<script type="application/json" id="data">${data}</script>
+<script>${JSON_TREE}</script></body></html>`
+}
+
 /**
  * Pagina per un componente React. `js` è il codice già traspilato (import → require).
  * Se il codice non chiama createRoot, viene montato in #root l'export default o, in mancanza,
- * una funzione `App` definita nel file.
+ * una funzione `App` definita nel file. Con `npm` (vedi npm.ts) i pacchetti si caricano prima del codice.
  */
-export async function reactDocument(js: string, userLines: number): Promise<string> {
+export async function reactDocument(js: string, userLines: number, npm?: Record<string, string>): Promise<string> {
+  const load = npm ? `__fishpad.npm = await __fishpadBridge.npm(${inlineSafe(JSON.stringify(npm))});` : ''
   const vendor = inlineSafe(await reactVendorScript())
   const head = (offset: number) => `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -63,7 +160,7 @@ ${dataScript(bridgeSource({ offset, lines: userLines, target: 'parent', frames: 
 <script>${vendor}</script>
 </head><body><div id="root"></div>
 <script>
-(async (exports) => {
+(async (exports) => {${load}
 `
   const offset = linesBefore(head(0))
   return `${head(offset)}${inlineSafe(js)}

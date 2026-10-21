@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { tabColorVar } from '../workbench/tabColors'
 import type { Doc, Pane, Workbench } from '../workbench/Workbench'
 import { ContextMenu, type MenuItem } from './Menu'
@@ -19,6 +20,8 @@ interface Props {
   compact?: { onNextPane?: () => void }
   /** documenti mostrati nell'anteprima e autori dell'output in console: le loro tab hanno un segno */
   marks: { preview?: string; console?: string }
+  /** se c'è, la barra delle tab sta lì (nella barra del titolo) invece che sopra l'editor */
+  tabHost?: HTMLElement | null
 }
 
 interface DraggedTab {
@@ -36,7 +39,7 @@ function tabTitle(d: Doc) {
   return `${d.name} (non salvato su disco)`
 }
 
-export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks }: Props) {
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks, tabHost }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
@@ -73,6 +76,113 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
     setDropTarget(true)
   }
 
+  const tabs = (
+    <nav className="tabs" ref={tabsRef} onDoubleClick={(e) => e.target === e.currentTarget && wb.newUntitled(pane.id)}>
+      {pane.docIds.map((id) => {
+        const d = docs.get(id)
+        if (!d) return null
+        return (
+          <div
+            key={id}
+            data-doc-id={id}
+            className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
+            style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
+            title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
+            draggable={!touch}
+            onDragStart={(e) => {
+              e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
+              e.dataTransfer.effectAllowed = 'copyMove'
+            }}
+            onClick={() => wb.activate(pane.id, id)}
+            onAuxClick={(e) => e.button === 1 && wb.closeTab(pane.id, id)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setTabMenu({ x: e.clientX, y: e.clientY, docId: id })
+            }}
+            {...longPress((x, y) => setTabMenu({ x, y, docId: id }))}
+          >
+            <span className="tab-name">{d.name}</span>
+            {marks.preview === id && (
+              <span className="tab-mark" title="Mostrato nell'anteprima" aria-label="in anteprima">
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" />
+                  <circle cx="8" cy="8" r="2" fill="currentColor" />
+                </svg>
+              </span>
+            )}
+            {marks.console === id && marks.preview !== id && (
+              <span className="tab-mark console-mark" title="L'output in console viene da questo file" aria-label="in console">
+                &gt;_
+              </span>
+            )}
+            <button
+              className={`tab-close${d.dirty ? ' dirty' : ''}`}
+              aria-label={`Chiudi ${d.name}`}
+              onClick={(e) => {
+                e.stopPropagation()
+                wb.closeTab(pane.id, id)
+              }}
+            >
+              <span className="dot">●</span>
+              <span className="x">×</span>
+            </button>
+          </div>
+        )
+      })}
+      <button className="tab-new" onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
+      <div className="spacer" />
+      <div className="pane-actions">
+        {compact ? (
+          compact.onNextPane && (
+            <button onClick={compact.onNextPane} title="Passa al pannello successivo" aria-label="Pannello successivo">⇄</button>
+          )
+        ) : (
+          <>
+            <button
+              onClick={() => void wb.split('row', pane.id)}
+              title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
+              aria-label="Dividi a destra"
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+                <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" />
+              </svg>
+            </button>
+            <button
+              onClick={() => void wb.split('column', pane.id)}
+              title="Dividi in basso: apre lo stesso file in un nuovo pannello sotto, con scroll e cursore propri"
+              aria-label="Dividi in basso"
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
+                <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
+              </svg>
+            </button>
+            {multiPane && (
+              <button
+                onClick={() => wb.rotate(pane.id)}
+                title="Ruota rispetto al pannello precedente: da affiancati a impilati e viceversa"
+                aria-label="Ruota pannello"
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor">
+                  <path d="M13 6.5A5.5 5.5 0 0 0 3.2 4.5" />
+                  <path d="M3 9.5a5.5 5.5 0 0 0 9.8 2" />
+                  <path d="M3 1.8v3h3" />
+                  <path d="M13 14.2v-3h-3" />
+                </svg>
+              </button>
+            )}
+          </>
+        )}
+        {multiPane && (
+          <button onClick={() => wb.closePane(pane.id)} title="Chiudi pannello" aria-label="Chiudi pannello">
+            ×
+          </button>
+        )}
+      </div>
+    </nav>
+  )
+
   return (
     <section
       className={`pane${active ? ' active' : ''}${dropTarget ? ' drop-target' : ''}`}
@@ -81,110 +191,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
       onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropTarget(false)}
       onDropCapture={onDrop}
     >
-      <nav className="tabs" ref={tabsRef} onDoubleClick={(e) => e.target === e.currentTarget && wb.newUntitled(pane.id)}>
-        {pane.docIds.map((id) => {
-          const d = docs.get(id)
-          if (!d) return null
-          return (
-            <div
-              key={id}
-              data-doc-id={id}
-              className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
-              style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
-              title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
-              draggable={!touch}
-              onDragStart={(e) => {
-                e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
-                e.dataTransfer.effectAllowed = 'copyMove'
-              }}
-              onClick={() => wb.activate(pane.id, id)}
-              onAuxClick={(e) => e.button === 1 && wb.closeTab(pane.id, id)}
-              onContextMenu={(e) => {
-                e.preventDefault()
-                setTabMenu({ x: e.clientX, y: e.clientY, docId: id })
-              }}
-              {...longPress((x, y) => setTabMenu({ x, y, docId: id }))}
-            >
-              <span className="tab-name">{d.name}</span>
-              {marks.preview === id && (
-                <span className="tab-mark" title="Mostrato nell'anteprima" aria-label="in anteprima">
-                  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                    <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" />
-                    <circle cx="8" cy="8" r="2" fill="currentColor" />
-                  </svg>
-                </span>
-              )}
-              {marks.console === id && marks.preview !== id && (
-                <span className="tab-mark console-mark" title="L'output in console viene da questo file" aria-label="in console">
-                  &gt;_
-                </span>
-              )}
-              <button
-                className={`tab-close${d.dirty ? ' dirty' : ''}`}
-                aria-label={`Chiudi ${d.name}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  wb.closeTab(pane.id, id)
-                }}
-              >
-                <span className="dot">●</span>
-                <span className="x">×</span>
-              </button>
-            </div>
-          )
-        })}
-        <button className="tab-new" onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
-        <div className="spacer" />
-        <div className="pane-actions">
-          {compact ? (
-            compact.onNextPane && (
-              <button onClick={compact.onNextPane} title="Passa al pannello successivo" aria-label="Pannello successivo">⇄</button>
-            )
-          ) : (
-            <>
-              <button
-                onClick={() => void wb.split('row', pane.id)}
-                title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
-                aria-label="Dividi a destra"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
-                  <line x1="8" y1="2.5" x2="8" y2="13.5" stroke="currentColor" />
-                </svg>
-              </button>
-              <button
-                onClick={() => void wb.split('column', pane.id)}
-                title="Dividi in basso: apre lo stesso file in un nuovo pannello sotto, con scroll e cursore propri"
-                aria-label="Dividi in basso"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <rect x="1.5" y="2.5" width="13" height="11" rx="1" fill="none" stroke="currentColor" />
-                  <line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" />
-                </svg>
-              </button>
-              {multiPane && (
-                <button
-                  onClick={() => wb.rotate(pane.id)}
-                  title="Ruota rispetto al pannello precedente: da affiancati a impilati e viceversa"
-                  aria-label="Ruota pannello"
-                >
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor">
-                    <path d="M13 6.5A5.5 5.5 0 0 0 3.2 4.5" />
-                    <path d="M3 9.5a5.5 5.5 0 0 0 9.8 2" />
-                    <path d="M3 1.8v3h3" />
-                    <path d="M13 14.2v-3h-3" />
-                  </svg>
-                </button>
-              )}
-            </>
-          )}
-          {multiPane && (
-            <button onClick={() => wb.closePane(pane.id)} title="Chiudi pannello" aria-label="Chiudi pannello">
-              ×
-            </button>
-          )}
-        </div>
-      </nav>
+      {tabHost ? createPortal(tabs, tabHost) : tabs}
       <div className="editor" ref={hostRef} />
       {tabMenu && menuDoc && (
         <ContextMenu

@@ -34,12 +34,14 @@ import { foldLevel, indentationFolding, restoreFoldEffects } from './folding'
 import { loadLanguage } from './languages'
 import { DEFAULT_INDENT, indentCompartment, indentExtension, type Indent } from './indentation'
 import { webExtensions } from './web'
+import { typeCheckEnabled } from './typeLint'
 
 export const languageCompartment = new Compartment()
 export const indentFoldCompartment = new Compartment()
 export const themeCompartment = new Compartment()
 export const fontCompartment = new Compartment()
 export const wrapCompartment = new Compartment()
+export const typeCheckCompartment = new Compartment()
 /** Emmet, colori CSS, controllo JSON: dipendono dal linguaggio (vedi web.ts) */
 export const webCompartment = new Compartment()
 
@@ -47,6 +49,8 @@ export interface EditorSettings {
   dark: boolean
   fontSize: number
   wrap: boolean
+  /** controllo dei tipi TypeScript/TSX (vedi typeLint.ts) */
+  typeCheck: boolean
 }
 
 // Un solo listener condiviso: gli EditorState delle tab vengono scambiati nella stessa view.
@@ -180,6 +184,7 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     themeCompartment.of(themeExtension(settings.dark)),
     fontCompartment.of(fontExtension(settings.fontSize)),
     wrapCompartment.of(wrapExtension(settings.wrap)),
+    typeCheckCompartment.of(typeCheckEnabled.of(settings.typeCheck)),
     EditorView.updateListener.of((u) => updateHandler?.(u)),
   ]
 }
@@ -200,12 +205,13 @@ export function createEditorState({ content, settings, cursor, folds, indent }: 
   return state
 }
 
-/** Effetti per allineare uno state alle impostazioni correnti (tema, font, a capo). */
+/** Effetti per allineare uno state alle impostazioni correnti (tema, font, a capo, controllo dei tipi). */
 export function settingsEffects(settings: EditorSettings) {
   return [
     themeCompartment.reconfigure(themeExtension(settings.dark)),
     fontCompartment.reconfigure(fontExtension(settings.fontSize)),
     wrapCompartment.reconfigure(wrapExtension(settings.wrap)),
+    typeCheckCompartment.reconfigure(typeCheckEnabled.of(settings.typeCheck)),
   ]
 }
 

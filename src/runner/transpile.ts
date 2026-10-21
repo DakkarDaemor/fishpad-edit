@@ -11,6 +11,7 @@ const TARGETS: Record<string, RunTarget> = {
   TSX: 'preview',
   HTML: 'preview',
   Markdown: 'preview',
+  JSON: 'preview',
 }
 
 /** Dove va eseguito un documento di questo linguaggio, o null se non è eseguibile. */
@@ -22,11 +23,15 @@ export const isRunnable = (lang: string | null | undefined) => runTarget(lang) !
 export const usesReact = (lang: string | null | undefined) => lang === 'JSX' || lang === 'TSX'
 
 const TRANSFORMS: Record<string, Transform[]> = {
+  JavaScript: [],
   TypeScript: ['typescript'],
   // `imports` porta import/export a require/exports: i moduli disponibili sono quelli di react-vendor.ts
   JSX: ['jsx', 'imports'],
   TSX: ['typescript', 'jsx', 'imports'],
 }
+
+/** true se il codice usa import/export: in console va eseguito come modulo, con i pacchetti npm da esm.sh. */
+export const isModule = (code: string) => /^\s*(?:import|export)\b|\bimport\s*\(/m.test(code)
 
 /** Errore di compilazione, con la riga relativa al codice passato. */
 export class CompileError extends Error {
@@ -45,8 +50,11 @@ export class CompileError extends Error {
  * degli errori a runtime restano quelle del file. Viene caricato al primo uso.
  */
 export async function toJavaScript(code: string, lang: string | null): Promise<string> {
-  const transforms = TRANSFORMS[lang ?? '']
-  if (!transforms) return code
+  const base = TRANSFORMS[lang ?? '']
+  if (!base) return code
+  // anche in console import/export diventano require/exports (vedi npm.ts); senza, lo script resta com'è
+  const transforms: Transform[] = base.includes('imports') || !isModule(code) ? base : [...base, 'imports']
+  if (!transforms.length) return code
   const { transform } = await import('sucrase')
   try {
     return transform(code, { transforms, disableESTransforms: true, jsxRuntime: 'automatic', production: true }).code

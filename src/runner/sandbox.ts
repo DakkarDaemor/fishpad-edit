@@ -15,6 +15,8 @@ export type SandboxMessage =
   | { kind: 'clear' }
   | { kind: 'done'; ok: boolean }
   | { kind: 'key'; code: string; key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }
+  /** clic su una chiave nell'albero JSON: percorso del nodo */
+  | { kind: 'goto'; path: (string | number)[] }
 
 export const SANDBOX_TAG = 'fishpad-run'
 
@@ -149,7 +151,20 @@ if (typeof document !== 'undefined') {
     send({ kind: 'key', code: e.code, key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey });
   }, true);
 }
-self.__fishpadBridge = { send, report };
+// Pacchetti npm (vedi npm.ts): { nome: url } → { nome: modulo }, con __esModule perché l'interop di
+// sucrase usi l'export default del modulo invece del modulo intero.
+async function npm(urls) {
+  const mods = {};
+  await Promise.all(Object.entries(urls).map(async ([name, url]) => {
+    try {
+      mods[name] = { __esModule: true, ...(await import(url)) };
+    } catch (e) {
+      throw new Error('Impossibile caricare "' + name + '" da esm.sh (' + url + '): ' + ((e && e.message) || e));
+    }
+  }));
+  return mods;
+}
+self.__fishpadBridge = { send, report, npm };
 })();
 `
 
@@ -186,15 +201,17 @@ export const linesBefore = (head: string) => head.split('\n').length - 1
 /**
  * Script completo del worker: bridge + codice utente in una funzione async
  * (così `await` funziona al livello principale e si sa quando l'esecuzione è finita).
+ * Con `npm` (codice con import/export) i moduli si caricano prima, e il codice riceve exports e require.
  */
-export function buildWorkerSource(code: string): { source: string; offset: number } {
-  const head = (offset: number) =>
-    bridgeSource({ offset, lines: code.split('\n').length, target: 'worker', frames: 'blob' }) + '\n;(async () => {\n'
+export function buildWorkerSource(code: string, npm?: Record<string, string>): { source: string; offset: number } {
+  const open = npm ? `\n;__fishpadBridge.npm(${JSON.stringify(npm)}).then((mods) => (async (exports, require) => {\n` : '\n;(async () => {\n'
+  const close = npm ? '\n})({}, (name) => mods[name]))' : '\n})()'
+  const head = (offset: number) => bridgeSource({ offset, lines: code.split('\n').length, target: 'worker', frames: 'blob' }) + open
   const offset = linesBefore(head(0))
   const source =
     head(offset) +
     code +
-    `\n})().then(() => __fishpadBridge.send({ kind: 'done', ok: true }), (e) => {\n` +
+    `${close}.then(() => __fishpadBridge.send({ kind: 'done', ok: true }), (e) => {\n` +
     `  __fishpadBridge.report(e);\n  __fishpadBridge.send({ kind: 'done', ok: false });\n});\n`
   return { source, offset }
 }

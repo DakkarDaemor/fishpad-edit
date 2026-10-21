@@ -18,6 +18,7 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Esplora file** (`Ctrl+B` per la barra laterale): File → Apri cartella mostra l'albero della cartella. Le sottocartelle si leggono solo quando le apri, l'albero si aggiorna tornando all'app, e il file della tab attiva è evidenziato. Col tasto destro: nuovo file, nuova cartella, rinomina, elimina (definitivo, con conferma), copia percorso relativo, aggiungi ai preferiti. Le tab dei file rinominati seguono il nuovo percorso. Dopo un riavvio il browser chiede di nuovo il permesso (pulsante "Riconnetti").
 - **Tab URL**: File → Apri URL esegue una richiesta GET, con header facoltativi, e apre la risposta in una tab. Il linguaggio viene dal `Content-Type`; il JSON è formattato con Prettier, che non arrotonda i numeri grandi. La barra di stato mostra codice HTTP e tempo; `F5` (o un clic lì) ripete la richiesta. Il server deve consentire le richieste dall'app (CORS); da una pagina `https` non si possono chiamare indirizzi `http`, tranne localhost. Salvata su disco, la tab diventa un file normale.
 - **Preferiti**: URL e file da riaprire con un clic, nella barra laterale e nel menu Preferiti. Si aggiungono con ☆ (tab attiva), dal menu della tab, dall'esplora file o spuntando "Aggiungi ai preferiti" in Apri URL. Gli header vengono salvati in chiaro nel browser.
+- **Barra del titolo** (PWA installata su desktop, Chromium): con la barra del titolo nascosta (il pulsante ˄ in alto a destra della finestra), menu e tab prendono il suo posto, accanto ai pulsanti della finestra; lo spazio libero trascina la finestra. Con un solo pannello le tab salgono nella barra; con più pannelli restano sopra ciascuno.
 - **"Apri con…" dal sistema operativo**: nella PWA installata, tramite `file_handlers` e `launchQueue`. Se l'app è già aperta, il file si apre come nuova tab.
 - **Telefono e tablet**: disposizione per schermi stretti, file salvati nella cartella dell'app, barra dei tasti sopra la tastiera, Condividi → Fishpad su Android. Dettagli e limiti nella [sezione dedicata](#telefono-e-tablet).
 - **Drag & drop di file** sulla finestra. Su Chromium il file resta collegato a quello su disco.
@@ -28,8 +29,10 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
   - chiusura per livello, come in VS Code
   - i blocchi chiusi vengono ricordati per ogni tab
 - **Indentazione per file**: spazi o tab e relativa larghezza vengono rilevati dal contenuto. Si possono cambiare dalla barra di stato, e c'è la conversione dell'intero file tra spazi e tab (annullabile con `Ctrl+Z`).
-- **Console JavaScript / TypeScript**: `Ctrl+Enter` esegue il file attivo, o solo la selezione, e mostra l'output in un pannello in basso, con `await` al livello principale, oggetti formattati e la riga degli errori cliccabile. Il codice gira in un Web Worker dentro un iframe `sandbox` con origine opaca: non accede a sessione e file dell'editor, e un loop infinito non blocca l'interfaccia (Stop termina tutto). TypeScript viene eseguito togliendo i tipi con sucrase, senza controllarli. Il modulo si carica solo al primo uso e conserva i numeri di riga.
-- **Anteprima HTML / React / Markdown**: per i file HTML, JSX, TSX e Markdown `Ctrl+Enter` apre un pannello a destra che si aggiorna mentre scrivi. Log ed errori della pagina vanno nella console. Nei file JSX/TSX si possono importare `react`, `react-dom` e `react-dom/client`: sono le build di produzione della versione usata dall'app, quindi funzionano offline. L'export default, o una funzione `App`, viene montato in automatico se il codice non chiama `createRoot`. Il Markdown viene mostrato come su GitHub (tabelle, liste di controllo…).
+- **Console JavaScript / TypeScript**: `Ctrl+Enter` esegue il file attivo, o solo la selezione, e mostra l'output in un pannello in basso, con `await` al livello principale, oggetti formattati e la riga degli errori cliccabile. Il codice gira in un Web Worker dentro un iframe `sandbox` con origine opaca: non accede a sessione e file dell'editor, e un loop infinito non blocca l'interfaccia (Stop termina tutto). TypeScript viene eseguito togliendo i tipi con sucrase, che si carica solo al primo uso e conserva i numeri di riga.
+- **Pacchetti npm nel playground**: in console (JS/TS) e nell'anteprima JSX/TSX si importa qualunque pacchetto npm (`import dayjs from 'dayjs'`, anche con versione o sottopercorso, `lodash@4/fp`) o un URL completo: viene caricato da [esm.sh](https://esm.sh) prima di eseguire il codice, quindi serve la rete. Mentre si scaricano, la console mostra quali sono. Gli import relativi (`./util`) non sono supportati.
+- **Controllo dei tipi** per TypeScript e TSX, mentre scrivi: gli errori del compilatore TypeScript (in modalità `strict`) sono sottolineati e segnati nel margine. Le librerie standard (ESNext e DOM) e i tipi di React sono quelli dell'app; i tipi dei pacchetti npm arrivano da esm.sh, e senza tipi (o senza rete) un pacchetto vale `any`. Il compilatore gira in un worker, scaricato al primo file TS aperto e poi disponibile offline. Gli errori di tipo non impediscono di eseguire il file. Ci sono anche i suggerimenti del compilatore (i membri dopo il punto, anche dei pacchetti npm, con firma e documentazione) e il tipo di un nome sotto il mouse. Si spegne tutto in Impostazioni → Aspetto (Controllo dei tipi): finché è spento il compilatore non viene nemmeno scaricato.
+- **Anteprima HTML / React / Markdown / JSON**: per i file HTML, JSX, TSX, Markdown e JSON `Ctrl+Enter` apre un pannello a destra che si aggiorna mentre scrivi. Log ed errori della pagina vanno nella console. Nei file JSX/TSX `react`, `react-dom` e `react-dom/client` sono le build di produzione della versione usata dall'app, quindi funzionano offline; se il file importa anche altri pacchetti npm, React arriva da esm.sh nella stessa versione, così i pacchetti usano la stessa copia. L'export default, o una funzione `App`, viene montato in automatico se il codice non chiama `createRoot`. Il Markdown viene mostrato come su GitHub (tabelle, liste di controllo…). Il JSON diventa un albero da aprire e chiudere, con il numero di chiavi o di elementi accanto a ogni nodo: i primi due livelli sono aperti, gli altri si costruiscono quando li apri (gli array lunghi 500 elementi alla volta), e i numeri grandi restano come nel file. Un clic su una chiave porta alla sua riga nel file.
 - **File locali nell'anteprima HTML**: per le pagine dentro la cartella aperta nell'esplora file, CSS, script, immagini e font referenziati con percorsi relativi vengono caricati da lì (anche gli `url()` dentro i CSS). Se uno di quei file è aperto nell'editor si usa il testo attuale, anche non salvato, e l'anteprima si aggiorna mentre lo modifichi. I pacchetti npm non vengono caricati.
 - **Suggerimenti** mentre scrivi (`Ctrl+Spazio` per richiamarli): tag e attributi HTML, proprietà CSS, parole chiave e snippet JS/TS.
 - **Emmet** in HTML, JSX/TSX, CSS, SCSS, LESS e simili: si scrive un'abbreviazione (`ul>li*3`, `m10`) e `Tab` la espande, `Ctrl+E` la forza.
@@ -101,7 +104,7 @@ Sui dispositivi touch, a qualunque larghezza:
 | Impostazioni | `Ctrl+,` |
 | Espandi abbreviazione Emmet | `Tab` (o `Ctrl+E`) |
 | Mostra i suggerimenti | `Ctrl+Spazio` |
-| Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown) | `Ctrl+Enter` |
+| Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown, JSON) | `Ctrl+Enter` |
 | Seleziona occorrenza successiva | `Ctrl+D` |
 | Chiudi / apri blocco | `Ctrl+Shift+[` / `Ctrl+Shift+]` |
 | Chiudi tutto / apri tutto | `Ctrl+K Ctrl+0` / `Ctrl+K Ctrl+J` |
@@ -121,7 +124,7 @@ npm test          # test unitari (vitest)
 
 I test (`+ nome.test.ts` nell'elenco qui sotto) stanno nella sottocartella `__tests__` della cartella del codice che provano.
 
-Stack: Vite, React, TypeScript, CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet, `@anthropic-ai/sdk` (solo per il provider Anthropic).
+Stack: Vite, React, TypeScript (anche nell'app, per il controllo dei tipi), CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet, `@anthropic-ai/sdk` (solo per il provider Anthropic).
 
 ```
 src/
@@ -135,7 +138,9 @@ src/
   shortcuts.ts         elenco delle scorciatoie mostrato in Aiuto
   runner/Runner.ts     esecuzione del codice e raccolta dell'output della console
   runner/transpile.ts  linguaggi eseguibili (console o anteprima) e traspilazione TS/JSX (+ transpile.test.ts)
-  runner/preview.ts    documenti dell'anteprima HTML, React e Markdown (+ preview.test.ts)
+  runner/preview.ts    documenti dell'anteprima HTML, React, Markdown e JSON ad albero (+ preview.test.ts, jsonTree.test.ts)
+  runner/jsonPath.ts   riga nel file di un nodo dell'albero JSON (+ jsonTree.test.ts)
+  runner/npm.ts        pacchetti npm da esm.sh: moduli richiesti dal codice e loro URL (+ npm.test.ts)
   runner/assets.ts     file locali della pagina in anteprima come URL data: (+ assets.test.ts)
   runner/folderAssets.ts lettura di quei file dalla cartella aperta o dall'editor
   runner/react-vendor.ts React per l'anteprima, con un require minimale
@@ -154,7 +159,9 @@ src/
   editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
   editor/detect.ts     riconoscimento dal contenuto (+ detect.test.ts)
   editor/indentation.ts rilevamento e conversione tab/spazi
-  editor/web.ts        Emmet, colori CSS e controllo JSON, caricati in base al linguaggio
+  editor/web.ts        Emmet, colori CSS, controllo JSON e dei tipi, caricati in base al linguaggio
+  editor/typecheck.ts  language service TS/TSX: file system virtuale, librerie, tipi da esm.sh, errori, suggerimenti (+ typecheck.test.ts)
+  editor/typeLint.ts   worker del controllo dei tipi (typecheck.worker.ts): linter, suggerimenti e tipo sotto il mouse
   editor/colors.ts     quadratini e selettore dei colori CSS (calcoli in colorValue.ts)
   editor/format.ts     Prettier, con i plugin caricati solo quando servono
   editor/diffStats.ts  righe aggiunte e tolte nel confronto (+ diffStats.test.ts)
@@ -185,12 +192,6 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 
 ## Roadmap
 
-**v1**
-- Window Controls Overlay (tab nella barra del titolo)
-- JSON: vista ad albero
-- Playground: `import` da npm (esm.sh), controllo dei tipi
-
-**Dopo**
 - Chat AI: risposte in streaming, più tab come contesto
 - Modalità Vim
 - Snippet

@@ -1,6 +1,9 @@
-import { htmlDocument, markdownDocument, reactDocument } from './preview'
+import { htmlDocument, jsonDocument, markdownDocument, reactDocument } from './preview'
 import { IFRAME_HTML, SANDBOX_TAG, buildWorkerSource, type LogLevel, type SandboxMessage } from './sandbox'
-import { CompileError, runTarget, toJavaScript, type RunTarget } from './transpile'
+import { CompileError, isModule, runTarget, toJavaScript, type RunTarget } from './transpile'
+import { npmUrls, previewModules, requiredModules } from './npm'
+import { REACT_MODULES } from './react-vendor'
+import { jsonPathLine } from './jsonPath'
 import { rewriteHtml } from './assets'
 import type { PreviewAssets } from './folderAssets'
 
@@ -48,7 +51,7 @@ const MAX_ENTRIES = 2000
 /**
  * Esegue il codice nella sandbox e raccoglie l'output della console:
  * - console (JS/TS): worker in un iframe nascosto (vedi sandbox.ts);
- * - anteprima (HTML/JSX/TSX/Markdown): iframe visibile, montato nel contenitore dato da setPreviewHost.
+ * - anteprima (HTML/JSX/TSX/Markdown/JSON): iframe visibile, montato nel contenitore dato da setPreviewHost.
  * Una sola sandbox alla volta; ogni esecuzione parte da un iframe nuovo, senza stato residuo.
  * La UI React legge gli snapshot immutabili via `subscribe`/`getSnapshot`.
  */
@@ -58,13 +61,15 @@ export class Runner {
   private preview: PreviewInfo | null = null
   private frame: HTMLIFrameElement | null = null
   private previewHost: HTMLElement | null = null
-  private current: (RunRequest & { target: RunTarget; startedAt: number }) | null = null
+  /** `npm`: moduli da caricare prima del codice in console (vedi npm.ts) */
+  private current: (RunRequest & { target: RunTarget; startedAt: number; npm?: Record<string, string> }) | null = null
   /** Incrementato a ogni run/stop: scarta le preparazioni arrivate dopo un'esecuzione più recente */
   private generation = 0
   private nextId = 1
   private listeners = new Set<() => void>()
   private snapshot: RunnerSnapshot = { entries: [], running: false, alive: false, preview: null, source: null }
   private source: PreviewInfo | null = null
+  private gotoListeners = new Set<(docId: string, line: number) => void>()
 
   constructor() {
     window.addEventListener('message', this.onMessage)
@@ -75,6 +80,12 @@ export class Runner {
     return () => this.listeners.delete(fn)
   }
   getSnapshot = () => this.snapshot
+
+  /** Clic su una chiave dell'albero JSON: `fn` riceve documento e riga da mostrare. Restituisce la disiscrizione. */
+  onGoto = (fn: (docId: string, line: number) => void) => {
+    this.gotoListeners.add(fn)
+    return () => void this.gotoListeners.delete(fn)
+  }
 
   private emit() {
     this.snapshot = {
@@ -107,7 +118,7 @@ export class Runner {
     }
     this.emit()
 
-    let prepared: string
+    let prepared: { code: string; npm?: Record<string, string> }
     try {
       prepared = await this.prepare(req, target)
     } catch (err) {
@@ -123,10 +134,16 @@ export class Runner {
       return
     }
     if (gen !== this.generation) return
+    // i pacchetti si scaricano prima del codice: senza questa riga la console resterebbe muta per qualche secondo
+    const packages = Object.keys(prepared.npm ?? {}).filter((n) => target === 'console' || !REACT_MODULES.includes(n))
+    if (packages.length) {
+      this.push({ level: 'system', text: `⇣ Caricamento da esm.sh: ${packages.join(', ')}` })
+      this.emit()
+    }
 
     const frame = document.createElement('iframe')
     if (target === 'console') {
-      this.current = { ...req, code: prepared, target, startedAt: performance.now() }
+      this.current = { ...req, ...prepared, target, startedAt: performance.now() }
       frame.sandbox.add('allow-scripts')
       frame.hidden = true
       frame.srcdoc = IFRAME_HTML
@@ -136,19 +153,25 @@ export class Runner {
       frame.sandbox.add('allow-scripts', 'allow-modals', 'allow-forms', 'allow-popups')
       frame.className = 'preview-frame'
       frame.title = `Anteprima di ${req.name}`
-      frame.srcdoc = prepared
+      frame.srcdoc = prepared.code
       this.previewHost?.appendChild(frame)
     }
     this.frame = frame
     this.emit()
   }
 
-  /** Console: il JavaScript da passare al worker. Anteprima: il documento dell'iframe. */
-  private async prepare(req: RunRequest, target: RunTarget): Promise<string> {
-    if (target === 'console') return toJavaScript(req.code, req.lang)
-    if (req.lang === 'HTML') return htmlDocument(await this.withAssets(req.code, req.assets))
-    if (req.lang === 'Markdown') return htmlDocument(await this.withAssets(await markdownDocument(req.code), req.assets))
-    return reactDocument(await toJavaScript(req.code, req.lang), req.code.split('\n').length)
+  /** Console: il JavaScript da passare al worker, con i moduli npm se è un modulo. Anteprima: il documento dell'iframe (con i moduli già dentro). */
+  private async prepare(req: RunRequest, target: RunTarget): Promise<{ code: string; npm?: Record<string, string> }> {
+    if (target === 'console') {
+      const code = await toJavaScript(req.code, req.lang)
+      return { code, npm: isModule(req.code) ? npmUrls(requiredModules(code)) : undefined }
+    }
+    if (req.lang === 'HTML') return { code: htmlDocument(await this.withAssets(req.code, req.assets)) }
+    if (req.lang === 'JSON') return { code: htmlDocument(jsonDocument(req.code)) }
+    if (req.lang === 'Markdown') return { code: htmlDocument(await this.withAssets(await markdownDocument(req.code), req.assets)) }
+    const js = await toJavaScript(req.code, req.lang)
+    const npm = previewModules(js)
+    return { npm, code: await reactDocument(js, req.code.split('\n').length, npm) }
   }
 
   private withAssets(html: string, assets: PreviewAssets | null | undefined) {
@@ -203,7 +226,7 @@ export class Runner {
     switch (data.kind) {
       case 'ready': {
         if (run.target !== 'console') break
-        const { source, offset } = buildWorkerSource(run.code)
+        const { source, offset } = buildWorkerSource(run.code, run.npm)
         frame.contentWindow!.postMessage({ source, offset, lines: run.code.split('\n').length }, '*')
         break
       }
@@ -222,6 +245,9 @@ export class Runner {
         window.dispatchEvent(new KeyboardEvent('keydown', { code, key, ctrlKey, metaKey, shiftKey, cancelable: true }))
         break
       }
+      case 'goto':
+        if (run.lang === 'JSON') void jsonPathLine(run.code, data.path).then((line) => line && this.gotoListeners.forEach((fn) => fn(run.docId, line)))
+        break
       case 'clear':
         this.entries = []
         this.emit()

@@ -62,7 +62,7 @@ export function ConsolePanel({ runner, height, canRun, onResize, onRun, onClose,
         }}
       >
         {entries.length === 0 && (
-          <div className="console-empty">Premi Ctrl+Enter in un file JavaScript o TypeScript per eseguirlo; con del testo selezionato esegue solo la selezione. HTML, JSX e TSX si aprono nell'anteprima.</div>
+          <div className="console-empty">Premi Ctrl+Enter in un file JavaScript o TypeScript per eseguirlo; con del testo selezionato esegue solo la selezione. HTML, JSX, TSX, Markdown e JSON si aprono nell'anteprima.</div>
         )}
         {entries.map((e) => (
           <div key={e.id} className={`console-line ${e.level}`}>

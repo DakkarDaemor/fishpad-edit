@@ -15,6 +15,8 @@ export interface Settings {
   theme: ThemeMode
   fontSize: number
   wrap: boolean
+  /** controllo dei tipi nei file TypeScript e TSX */
+  typeCheck: boolean
   /** barra laterale con preferiti ed esplora file */
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
@@ -44,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   fontSize: 14,
   wrap: false,
+  typeCheck: true,
   sidebar: false,
   diff: { collapse: true, normalize: false },
   save: { trimTrailing: false, finalNewline: false },

@@ -28,8 +28,10 @@ describe('reactVendorScript', () => {
     expect(run('__fishpad.rendered')).toBe(true)
   })
 
-  it('un modulo non disponibile dà un errore che elenca quelli importabili', async () => {
+  it('i pacchetti caricati da esm.sh hanno la precedenza, anche per React', async () => {
     const run = await load()
-    expect(() => run(`require('lodash')`)).toThrow(/"lodash" non disponibile.*react, react\/jsx-runtime, react-dom, react-dom\/client/)
+    expect(() => run(`require('lodash')`)).toThrow(/"lodash" non disponibile/)
+    run(`__fishpad.npm = { lodash: { __esModule: true, id: 'lodash' }, react: { __esModule: true, id: 'esm-react' } }`)
+    expect(run(`require('lodash').id + ' ' + require('react').id`)).toBe('lodash esm-react')
   })
 })

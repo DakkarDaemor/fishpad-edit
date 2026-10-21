@@ -21,8 +21,10 @@ const TEXT_EXTENSIONS = [
 export default defineConfig({
   base,
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  // il chunk più grande è il plugin TypeScript di Prettier (~900 kB), caricato solo alla prima formattazione
-  build: { chunkSizeWarningLimit: 1000 },
+  // il chunk più grande è il compilatore TypeScript del controllo dei tipi, caricato nel suo worker solo con un file TS aperto
+  build: { chunkSizeWarningLimit: 4000 },
+  // il worker del controllo dei tipi carica le librerie .d.ts a pezzi (import dinamici)
+  worker: { format: 'es' },
   plugins: [
     react(),
     VitePWA({
@@ -37,6 +39,8 @@ export default defineConfig({
         start_url: base,
         scope: base,
         display: 'standalone',
+        // PWA installata su desktop: la barra dell'app (menu e tab) può prendere il posto della barra del titolo
+        display_override: ['window-controls-overlay'],
         background_color: '#0d3a4d',
         theme_color: '#0d3a4d',
         icons: [
@@ -65,6 +69,15 @@ export default defineConfig({
       workbox: {
         importScripts: ['share-target-sw.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // compilatore e .d.ts del controllo dei tipi (~8 MB): si scaricano al primo file TS, poi restano offline
+        globIgnores: ['**/typecheck.worker-*.js', '**/lib.*.d-*.js', '**/index.d-*.js'],
+        runtimeCaching: [
+          {
+            urlPattern: /\/assets\/(?:typecheck\.worker|lib\.[\w.]+\.d|index\.d)-[\w-]+\.js$/,
+            handler: 'CacheFirst',
+            options: { cacheName: 'typecheck', expiration: { maxEntries: 300 } },
+          },
+        ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),

@@ -20,7 +20,7 @@ export const SHORTCUTS: Array<[string, string]> = [
   ['Impostazioni', 'Ctrl+,'],
   ['Espandi abbreviazione Emmet', 'Tab (o Ctrl+E)'],
   ['Mostra i suggerimenti', 'Ctrl+Spazio'],
-  ['Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown)', 'Ctrl+Enter'],
+  ['Esegui file o selezione (JS, TS) / anteprima (HTML, JSX, TSX, Markdown, JSON)', 'Ctrl+Enter'],
   ['Seleziona occorrenza successiva', 'Ctrl+D'],
   ['Chiudi / apri blocco', 'Ctrl+Shift+[ / Ctrl+Shift+]'],
   ['Chiudi tutto / apri tutto', 'Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J'],

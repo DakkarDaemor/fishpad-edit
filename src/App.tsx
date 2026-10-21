@@ -99,8 +99,8 @@ interface DiffState {
 
 type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
-function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap'>, systemDark: boolean): EditorSettings {
-  return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap }
+function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck'>, systemDark: boolean): EditorSettings {
+  return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck }
 }
 
 export default function App() {
@@ -136,6 +136,9 @@ export default function App() {
   const [urlDialog, setUrlDialog] = useState<UrlDialogState | null>(null)
   /** schermo del telefono: un pannello alla volta, barra laterale a cassetto, anteprima sopra l'editor */
   const compact = useMediaQuery(COMPACT_QUERY)
+  // PWA installata con la barra del titolo nascosta: con un solo pannello le sue tab salgono nella barra dell'app
+  const wco = useMediaQuery('(display-mode: window-controls-overlay)')
+  const [titleTabs, setTitleTabs] = useState<HTMLElement | null>(null)
   /** dispositivo touch: tastiera virtuale, niente hover né tasto destro */
   const touch = useMediaQuery(COARSE_QUERY)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -792,7 +795,7 @@ export default function App() {
 
   /**
    * JS/TS: esegue il file attivo in console, o solo la selezione se c'è.
-   * HTML/JSX/TSX: apre (o ricarica) l'anteprima del file. false se il file non è eseguibile.
+   * HTML/JSX/TSX/Markdown/JSON: apre (o ricarica) l'anteprima del file. false se il file non è eseguibile.
    */
   function runActive(): boolean {
     const doc = wb.activeDoc
@@ -869,11 +872,13 @@ export default function App() {
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat }
+  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat, gotoDocLine }
   const actions = useRef(all)
   useEffect(() => {
     actions.current = all
   })
+  // clic su una chiave nell'albero JSON dell'anteprima
+  useEffect(() => runner.onGoto((docId, line) => actions.current.gotoDocLine(docId, line)), [runner])
 
   // ---------- inizializzazione ----------
 
@@ -1077,8 +1082,8 @@ export default function App() {
   }, [])
 
   // Impostazioni → editor
-  const { theme, fontSize, wrap } = settings
-  const editorSettings = useMemo(() => toEditorSettings({ theme, fontSize, wrap }, systemDark), [theme, fontSize, wrap, systemDark])
+  const { theme, fontSize, wrap, typeCheck } = settings
+  const editorSettings = useMemo(() => toEditorSettings({ theme, fontSize, wrap, typeCheck }, systemDark), [theme, fontSize, wrap, typeCheck, systemDark])
   useEffect(() => {
     document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
     wb.setEditorSettings(editorSettings)
@@ -1355,6 +1360,7 @@ export default function App() {
         tabMenuExtra={tabMenuExtra}
         compact={compact ? { onNextPane: multiPane ? nextPane : undefined } : undefined}
         marks={{ preview: runState.preview?.docId, console: runState.source?.docId }}
+        tabHost={titleTabs}
       />
     ) : null
   }
@@ -1384,6 +1390,7 @@ export default function App() {
           {!compact && <span className="version">v{__APP_VERSION__}</span>}
         </span>
         {!compact && <MenuBar menus={menus} />}
+        {wco && !compact && !multiPane && <div className="title-tabs" ref={setTitleTabs} />}
         <div className="spacer" />
         {compact ? (
           <>

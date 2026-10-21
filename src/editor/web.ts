@@ -1,4 +1,4 @@
-import type { Extension } from '@codemirror/state'
+import { EditorState, type Extension } from '@codemirror/state'
 import { keymap } from '@codemirror/view'
 
 /** Sintassi Emmet per i linguaggi di @codemirror/language-data (e JSX/TSX). */
@@ -23,7 +23,8 @@ const COLOR_LANGS = new Set(['CSS', 'SCSS', 'Sass', 'LESS', 'Stylus', 'HTML', 'V
  * Strumenti per lo sviluppo web legati al linguaggio, caricati solo quando servono:
  * - Emmet: abbreviazioni espanse con Tab (in JSX/TSX iniziano con `<`), Ctrl+E per forzarle;
  * - quadratini dei colori CSS con selettore;
- * - controllo della sintassi JSON, con gli errori nel margine.
+ * - controllo della sintassi JSON e dei tipi TypeScript/TSX, con gli errori nel margine;
+ * - in TypeScript/TSX, suggerimenti del compilatore e tipo sotto il mouse.
  */
 export async function webExtensions(lang: string | null): Promise<Extension> {
   if (!lang) return []
@@ -40,6 +41,20 @@ export async function webExtensions(lang: string | null): Promise<Extension> {
   if (lang === 'JSON') {
     const [{ jsonParseLinter }, { linter, lintGutter }] = await Promise.all([import('@codemirror/lang-json'), import('@codemirror/lint')])
     exts.push(linter(jsonParseLinter(), { delay: 300 }), lintGutter())
+  }
+  if (lang === 'TypeScript' || lang === 'TSX') {
+    const [{ typeLintSource, typeCheckChanged, typeCompletionSource, typeHover }, { linter, lintGutter }] = await Promise.all([
+      import('./typeLint'),
+      import('@codemirror/lint'),
+    ])
+    // una sola istanza: CodeMirror riconosce i risultati di una sorgente confrontandola per identità
+    const complete = typeCompletionSource(lang)
+    exts.push(
+      linter(typeLintSource(lang), { delay: 500, needsRefresh: typeCheckChanged }),
+      lintGutter(),
+      typeHover(lang),
+      EditorState.languageData.of(() => [{ autocomplete: complete }]),
+    )
   }
   return exts
 }

@@ -2,6 +2,14 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 12.0
+
+- Pacchetti npm nel playground: in console (JavaScript e TypeScript) e nell'anteprima JSX/TSX si può importare qualunque pacchetto npm, anche con versione o sottopercorso (`import dayjs from 'dayjs'`, `lodash@4/fp`), o un URL completo. I moduli arrivano da esm.sh prima che il codice parta, quindi serve la rete; mentre si scaricano la console mostra quali sono, e se uno non si carica dice quale. Nell'anteprima, con un pacchetto npm anche React arriva da esm.sh, nella stessa versione dell'app, così hook e componenti dei pacchetti funzionano; senza, React resta quello dell'app e funziona offline.
+- Controllo dei tipi per TypeScript e TSX: mentre scrivi, gli errori del compilatore sono sottolineati e segnati nel margine, con il messaggio passandoci sopra. Ci sono i tipi del browser e di React, e quelli dei pacchetti npm importati (da esm.sh); un pacchetto senza tipi vale `any`. Il controllo gira a parte e non rallenta l'editor; il compilatore si scarica al primo file TypeScript e poi resta disponibile offline. Gli errori di tipo non impediscono di eseguire il file. Si spegne in Impostazioni → Aspetto → Controllo dei tipi.
+- TypeScript e TSX: suggerimenti del compilatore mentre scrivi (dopo `oggi.` compaiono i metodi di `oggi`, anche per i pacchetti npm), con firma e documentazione della voce evidenziata, e il tipo di un nome passandoci sopra col mouse. Si spengono insieme al controllo dei tipi.
+- Vista ad albero del JSON: `Ctrl+Enter` in un file JSON apre l'anteprima con l'albero, che si aggiorna mentre scrivi. Ogni nodo mostra quante chiavi o elementi contiene; i primi due livelli sono aperti, e anche i file grandi restano leggeri, perché i nodi si costruiscono quando li apri (negli array lunghi, 500 elementi alla volta). I numeri grandi restano come nel file. Un clic su una chiave (o sull'indice di un elemento) porta alla sua riga nel file; la freccia apre e chiude il nodo. Se il JSON non è valido, l'errore va in console.
+- Barra del titolo nell'app installata (desktop, Chrome ed Edge): nascondendo la barra del titolo della finestra (˄ accanto ai pulsanti della finestra), menu e tab ne prendono il posto e lo spazio libero trascina la finestra. Con un solo pannello le tab salgono nella barra; con più pannelli restano sopra ognuno.
+
 ## 11.0
 
 - Modifica → Trasforma: ordina le righe (A → Z o Z → A, con i numeri in ordine naturale), invertile, togli le righe duplicate o gli spazi a fine riga, passa a MAIUSCOLO o minuscolo, codifica e decodifica Base64 (UTF-8) e URL. Per il JSON: ordina le chiavi a ogni livello o minifica, senza arrotondare i numeri grandi. Ogni comando agisce sulla selezione (anche su più cursori) o, se non c'è, su tutto il file, e si annulla con `Ctrl+Z`. Si trovano anche nella palette dei comandi.

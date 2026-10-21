@@ -58,6 +58,7 @@ describe('runTarget', () => {
     expect(runTarget('JSX')).toBe('preview')
     expect(runTarget('TSX')).toBe('preview')
     expect(runTarget('HTML')).toBe('preview')
+    expect(runTarget('JSON')).toBe('preview')
     expect(runTarget('Python')).toBeNull()
     expect(runTarget(null)).toBeNull()
   })

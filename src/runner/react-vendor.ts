@@ -33,7 +33,7 @@ export function reactVendorScript(): Promise<string> {
       }),
     )
     return `var process = { env: { NODE_ENV: 'production' } };
-var __fishpad = { rendered: false };
+var __fishpad = { rendered: false, npm: null };
 var require = (function () {
   var defs = {
 ${entries.join(',\n')}
@@ -41,9 +41,11 @@ ${entries.join(',\n')}
   var cache = {};
   return function require(name) {
     if (cache[name]) return cache[name].exports;
-    if (!defs[name]) throw new Error('Modulo "' + name + '" non disponibile nell\\'anteprima: si possono importare solo ${REACT_MODULES.join(', ')}');
-    var module = (cache[name] = { exports: {} });
-    defs[name](module, module.exports, require);
+    // pacchetti caricati da esm.sh (vedi npm.ts): quando ci sono, anche React arriva da lì
+    var npm = __fishpad.npm && __fishpad.npm[name];
+    if (!npm && !defs[name]) throw new Error('Modulo "' + name + '" non disponibile nell\\'anteprima');
+    var module = (cache[name] = { exports: npm || {} });
+    if (!npm) defs[name](module, module.exports, require);
     if (name === 'react-dom/client') {
       var createRoot = module.exports.createRoot;
       module.exports.createRoot = function () { __fishpad.rendered = true; return createRoot.apply(this, arguments); };

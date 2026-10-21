@@ -28,6 +28,7 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
 
   const diff = settings.diff
   const setDiff = (patch: Partial<Settings['diff']>) => onChange({ diff: { ...diff, ...patch } })
+  const setSave = (patch: Partial<Settings['save']>) => onChange({ save: { ...settings.save, ...patch } })
   const setProvider = (id: string, patch: Partial<AiProvider>) =>
     onChange({ ai: { ...settings.ai, providers: settings.ai.providers.map((p) => (p.id === id ? { ...p, ...patch } : p)) } })
 
@@ -75,6 +76,13 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
               </label>
               <label className="check">
                 <input type="checkbox" checked={settings.wrap} onChange={(e) => onChange({ wrap: e.target.checked })} /> A capo automatico
+              </label>
+              <h3>Al salvataggio</h3>
+              <label className="check">
+                <input type="checkbox" checked={settings.save.trimTrailing} onChange={(e) => setSave({ trimTrailing: e.target.checked })} /> Rimuovi spazi a fine riga (non nel Markdown)
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={settings.save.finalNewline} onChange={(e) => setSave({ finalNewline: e.target.checked })} /> Termina il file con un a capo
               </label>
             </>
           )}

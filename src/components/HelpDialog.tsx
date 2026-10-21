@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { loadMarked } from '../markdown'
 import { SHORTCUTS } from '../shortcuts'
 
 export type HelpView = 'shortcuts' | 'changelog'
@@ -11,8 +12,8 @@ interface Props {
 
 /** Il CHANGELOG fa parte della build (import ?raw, caricato alla prima apertura): si legge anche offline. */
 async function changelogHtml() {
-  const [{ default: md }, { marked }] = await Promise.all([import('../../CHANGELOG.md?raw'), import('marked')])
-  return marked.parse(md.replace(/^# .*\r?\n/, ''), { gfm: true })
+  const [{ default: md }, marked] = await Promise.all([import('../../CHANGELOG.md?raw'), loadMarked()])
+  return marked.parse(md.replace(/^# .*\r?\n/, ''))
 }
 
 /** Finestra di aiuto: scorciatoie da tastiera e novità delle versioni. */

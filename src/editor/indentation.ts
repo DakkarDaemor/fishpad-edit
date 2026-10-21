@@ -13,6 +13,7 @@ export function indentExtension({ tabs, size }: Indent): Extension {
   return [indentUnit.of(tabs ? '\t' : ' '.repeat(size)), EditorState.tabSize.of(size)]
 }
 
+export const indentString = (i: Indent) => (i.tabs ? '	' : ' '.repeat(i.size))
 export const indentLabel = (i: Indent) => (i.tabs ? `Tab: ${i.size}` : `Spazi: ${i.size}`)
 
 /**

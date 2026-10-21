@@ -1,3 +1,4 @@
+import { loadMarked } from '../markdown'
 import { reactVendorScript } from './react-vendor'
 import { bridgeSource, linesBefore } from './sandbox'
 
@@ -44,8 +45,7 @@ img { max-width: 100%; }
 
 /** Pagina HTML con il Markdown convertito (GitHub Flavored Markdown). `marked` viene caricato al primo uso. */
 export async function markdownDocument(md: string): Promise<string> {
-  const { marked } = await import('marked')
-  const body = await marked.parse(md, { gfm: true })
+  const body = await (await loadMarked()).parse(md)
   return `<!doctype html><html><head><meta charset="utf-8"><style>${MARKDOWN_STYLE}</style></head><body>${body}</body></html>`
 }
 

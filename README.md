@@ -36,6 +36,8 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Colori CSS**: un quadratino accanto a ogni colore nei fogli di stile e in HTML; cliccandolo si apre il selettore del sistema, e il valore viene riscritto nello stesso formato (hex, `rgb()`, `hsl()`), mantenendo la trasparenza.
 - **Controllo JSON**: gli errori di sintassi sono sottolineati e segnati nel margine.
 - **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown e YAML. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
+- **Trasforma** (Modifica → Trasforma): ordina, inverti o togli i duplicati delle righe, togli gli spazi a fine riga, MAIUSCOLO / minuscolo, codifica e decodifica Base64 e URL, e per il JSON ordina le chiavi o minifica (senza arrotondare i numeri grandi). Agisce sulla selezione o, se non c'è, su tutto il file; si annulla con `Ctrl+Z`.
+- **Al salvataggio** (Impostazioni → Aspetto, spenti all'inizio): togli gli spazi a fine riga (non nel Markdown, dove due spazi vanno a capo) e termina il file con un a capo.
 - **Confronta** (Modifica → Confronta): la tab contro la versione su disco, un'altra tab, gli appunti o un file, affiancati o in vista unificata, con le differenze evidenziate dentro la riga e le righe uguali piegate. A destra si modifica e le frecce portano i blocchi dall'altro lato; "Ignora formattazione" passa i testi da Prettier per nascondere le differenze di sola formattazione.
 - **Cronologia locale** (File → Cronologia locale, o il menu della tab): una copia del testo a ogni salvataggio, prima di ogni ricarica dal disco o dall'URL, alla chiusura della tab e ogni 5 minuti se è cambiato. Si sceglie la versione e si apre nel confronto, dove si prendono i blocchi che servono o "Usa tutto l'altro". Fino a 30 versioni per file e 400 in tutto, nel browser.
 - **Riapri tab chiusa** (`Alt+Shift+T`, o File → Riapri tab chiusa): le ultime 20, con il testo non salvato.
@@ -185,8 +187,7 @@ Se usi un dominio custom o un repo `<utente>.github.io`, imposta `BASE_PATH: /` 
 
 **v1**
 - Window Controls Overlay (tab nella barra del titolo)
-- Strumenti JSON (ordina chiavi, minifica, vista ad albero)
-- Trasformazioni testo (ordina, rimuovi duplicati, Base64/URL, …)
+- JSON: vista ad albero
 - Playground: `import` da npm (esm.sh), controllo dei tipi
 
 **Dopo**

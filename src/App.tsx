@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { EditorView } from '@codemirror/view'
 import { redo, selectAll, toggleComment, undo } from '@codemirror/commands'
 import { foldAll, unfoldAll } from '@codemirror/language'
+import { EditorSelection } from '@codemirror/state'
 import { gotoLine, openSearchPanel } from '@codemirror/search'
 import { openReplacePanel, type EditorSettings } from './editor/setup'
 import { foldLevel } from './editor/folding'
 import { detectByFilename, extensionFor } from './editor/languages'
 import { canFormat, formatCode } from './editor/format'
-import { DEFAULT_INDENT } from './editor/indentation'
+import * as tx from './editor/transforms'
+import { DEFAULT_INDENT, indentString } from './editor/indentation'
 import {
   detectEol,
   diskMtime,
@@ -232,6 +234,11 @@ export default function App() {
     return encode(text, 'utf-8').bytes
   }
 
+  /** Spazi a fine riga e a capo finale, secondo le Impostazioni; la modifica resta nella tab e Ctrl+Z la annulla. */
+  function cleanForSave(doc: Doc) {
+    wb.setText(doc.id, tx.cleanForSave(wb.content(doc.id), settings.save, doc.lang))
+  }
+
   /** Nome proposto salvando o esportando: quello del file, o dall'URL, con l'estensione del linguaggio se manca. */
   function suggestedName(doc: Doc) {
     const base = doc.request ? fileBaseName(new URL(doc.request.url)) : doc.name
@@ -261,6 +268,7 @@ export default function App() {
           flash('Salvataggio annullato. File → Ricarica dal disco mostra la versione su disco')
           return
         }
+        cleanForSave(doc)
         const data = encodeDoc(doc)
         if (!data) return
         const mtime = await writeHandle(doc.handle, data)
@@ -270,6 +278,7 @@ export default function App() {
         flash(`Salvato: ${doc.name}`)
         return
       }
+      cleanForSave(doc)
       const data = encodeDoc(doc)
       if (!data) return
       const suggested = suggestedName(doc)
@@ -624,6 +633,26 @@ export default function App() {
     } catch (err) {
       // gli errori di sintassi di Prettier riportano anche il codice: basta la prima riga
       flash(`Formattazione non riuscita: ${(err as Error).message.split('\n')[0]}`)
+    }
+    v.focus()
+  }
+
+  /** Applica `fn` a ogni selezione o, se non c'è, a tutto il documento; Ctrl+Z la annulla. */
+  function transform(fn: (text: string) => string) {
+    const v = wb.activeView
+    if (!v) return
+    const { state } = v
+    try {
+      const spec = state.selection.ranges.some((r) => !r.empty)
+        ? state.changeByRange((r) => {
+            if (r.empty) return { range: r }
+            const insert = fn(state.sliceDoc(r.from, r.to))
+            return { changes: { from: r.from, to: r.to, insert }, range: EditorSelection.range(r.from, r.from + insert.length) }
+          })
+        : { changes: diffRange(state.doc.toString(), fn(state.doc.toString())) ?? [] }
+      v.dispatch({ ...spec, scrollIntoView: true, userEvent: 'input.transform' })
+    } catch (err) {
+      flash(`Trasformazione non riuscita: ${(err as Error).message}`)
     }
     v.focus()
   }
@@ -1160,6 +1189,27 @@ export default function App() {
         'separator',
         { label: 'Commenta / decommenta', shortcut: 'Ctrl+/', action: () => run(toggleComment) },
         { label: 'Formatta documento', shortcut: 'Shift+Alt+F', disabled: !canFormat(active?.lang), action: () => void formatActive() },
+        {
+          label: 'Trasforma',
+          submenu: [
+            { label: 'Ordina righe (A → Z)', disabled: !active, action: () => transform((t) => tx.sortLines(t)) },
+            { label: 'Ordina righe (Z → A)', disabled: !active, action: () => transform((t) => tx.sortLines(t, true)) },
+            { label: 'Inverti righe', disabled: !active, action: () => transform(tx.reverseLines) },
+            { label: 'Rimuovi righe duplicate', disabled: !active, action: () => transform(tx.uniqueLines) },
+            { label: 'Rimuovi spazi a fine riga', disabled: !active, action: () => transform(tx.trimTrailing) },
+            'separator',
+            { label: 'MAIUSCOLO', disabled: !active, action: () => transform((t) => t.toLocaleUpperCase()) },
+            { label: 'minuscolo', disabled: !active, action: () => transform((t) => t.toLocaleLowerCase()) },
+            'separator',
+            { label: 'Codifica Base64', disabled: !active, action: () => transform(tx.base64Encode) },
+            { label: 'Decodifica Base64', disabled: !active, action: () => transform(tx.base64Decode) },
+            { label: 'Codifica URL', disabled: !active, action: () => transform(tx.urlEncode) },
+            { label: 'Decodifica URL', disabled: !active, action: () => transform(tx.urlDecode) },
+            'separator',
+            { label: 'JSON: ordina chiavi', disabled: !active, action: () => transform((t) => tx.jsonSortKeys(t, indentString(active?.indent ?? DEFAULT_INDENT))) },
+            { label: 'JSON: minifica', disabled: !active, action: () => transform(tx.jsonMinify) },
+          ],
+        },
         'separator',
         {
           label: 'Confronta',

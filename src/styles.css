@@ -431,6 +431,7 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--f
 }
 .form input:focus, .form textarea:focus { border-color: var(--accent); }
 .form small { font-size: 11px; }
+.form h3 { margin: 8px 0 -4px; font-size: 12px; font-weight: 600; color: var(--fg-muted); }
 .form-error { margin: 0; color: var(--danger); }
 .form-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .form-actions button { padding: 4px 14px; border-color: var(--border); }

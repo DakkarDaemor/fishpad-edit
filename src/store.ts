@@ -1,6 +1,7 @@
 import { del, get, set } from 'idb-keyval'
 import type { Encoding } from './encoding'
 import type { Indent } from './editor/indentation'
+import type { SaveCleanup } from './editor/transforms'
 import type { Layout } from './workbench/layout'
 import type { TabColor } from './workbench/tabColors'
 import type { UrlRequest, UrlResponse } from './remote'
@@ -18,6 +19,8 @@ export interface Settings {
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
   diff: DiffPrefs
+  /** pulizia del testo a ogni salvataggio */
+  save: SaveCleanup
   ai: AiSettings
 }
 
@@ -43,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   wrap: false,
   sidebar: false,
   diff: { collapse: true, normalize: false },
+  save: { trimTrailing: false, finalNewline: false },
   ai: { providers: DEFAULT_PROVIDERS },
 }
 

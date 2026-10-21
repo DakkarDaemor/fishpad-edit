@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 11.0
+
+- Modifica → Trasforma: ordina le righe (A → Z o Z → A, con i numeri in ordine naturale), invertile, togli le righe duplicate o gli spazi a fine riga, passa a MAIUSCOLO o minuscolo, codifica e decodifica Base64 (UTF-8) e URL. Per il JSON: ordina le chiavi a ogni livello o minifica, senza arrotondare i numeri grandi. Ogni comando agisce sulla selezione (anche su più cursori) o, se non c'è, su tutto il file, e si annulla con `Ctrl+Z`. Si trovano anche nella palette dei comandi.
+- Impostazioni → Aspetto → Al salvataggio: togli gli spazi a fine riga e termina il file con un a capo. Sono spenti all'inizio. Nel Markdown gli spazi finali restano, perché due spazi vanno a capo.
+- Markdown (anteprima, chat AI e Novità delle versioni): il grassetto che finisce con la punteggiatura ed è seguito subito da una lettera, frequente in titoli ed elenchi come `- **Voce:**testo`, ora appare in grassetto invece di lasciare gli asterischi.
+
 ## 10.1
 
 - Tema chiaro: il testo selezionato sulla riga del cursore ora si vede (lo sfondo della riga corrente copriva la selezione).

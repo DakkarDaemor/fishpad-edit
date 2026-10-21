@@ -1,4 +1,5 @@
 import { Marked } from 'marked'
+import { looseStrong } from '../markdown'
 
 export type ChatBlock = { kind: 'html'; html: string } | { kind: 'code'; lang: string; code: string }
 
@@ -9,7 +10,7 @@ const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
  * (o copiato da un file preso dal web) si mostra come testo, i link valgono solo se http(s)/mailto e le immagini
  * non vengono caricate (potrebbero mandare dati a un server esterno).
  */
-const md = new Marked({ gfm: true })
+const md = new Marked({ gfm: true }, looseStrong)
 md.use({
   renderer: {
     html: ({ text }) => escapeHtml(text),

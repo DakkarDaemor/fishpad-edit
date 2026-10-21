@@ -9,7 +9,8 @@
   --fg-muted: #6e7781;
   --border: #d0d7de;
   --accent: #0969da;
-  --active-line: #f5f8fc;
+  /* trasparente: il livello della selezione sta sotto le righe e un colore pieno la nasconderebbe */
+  --active-line: rgb(9 105 218 / 0.04);
   --danger: #cf222e;
   /* colori pastello delle tab; il bordo della tab aperta è lo stesso colore scurito */
   --tab-red: #f9c6c6;

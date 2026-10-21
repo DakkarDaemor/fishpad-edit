@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 10.1
+
+- Tema chiaro: il testo selezionato sulla riga del cursore ora si vede (lo sfondo della riga corrente copriva la selezione).
+
 ## 10.0
 
 - Ruota pannello: un pannello e quello che lo precede passano da affiancati a impilati e viceversa, mentre gli altri restano dove sono (con A | B | C, ruotando C si ottiene A | (B sopra C); ruotando di nuovo si torna indietro). Si usa con l'icona ⟳ accanto a quelle di divisione, da Visualizza → Ruota pannello (anche nella palette dei comandi) o col tasto destro su un divisore, che ruota i due pannelli ai suoi lati e può anche renderne uguali le dimensioni. Il primo pannello di una divisione ruota con quello che lo segue.

@@ -37,6 +37,7 @@ import { loadLanguage } from './languages'
 import { DEFAULT_INDENT, indentCompartment, indentExtension, type Indent } from './indentation'
 import { webExtensions } from './web'
 import { typeCheckEnabled } from './typeLint'
+import { paletteExtension, type Palette } from './themes'
 
 /**
  * Posizione della spiegazione di un suggerimento: accanto alla lista se c'è spazio, altrimenti sotto o sopra
@@ -77,6 +78,8 @@ export const webCompartment = new Compartment()
 
 export interface EditorSettings {
   dark: boolean
+  /** tema con colori propri (Solarized, Dracula); null = chiaro o scuro */
+  palette: Palette | null
   fontSize: number
   wrap: boolean
   /** controllo dei tipi TypeScript/TSX (vedi typeLint.ts) */
@@ -110,7 +113,8 @@ const lightHighlight = syntaxHighlighting(
   ]),
 )
 
-export function themeExtension(dark: boolean): Extension {
+export function themeExtension({ dark, palette }: Pick<EditorSettings, 'dark' | 'palette'>): Extension {
+  if (palette) return paletteExtension(palette)
   return dark ? oneDark : [lightTheme, lightHighlight]
 }
 
@@ -211,7 +215,7 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     languageCompartment.of([]),
     indentCompartment.of(indentExtension(indent)),
     indentFoldCompartment.of(indentationFolding),
-    themeCompartment.of(themeExtension(settings.dark)),
+    themeCompartment.of(themeExtension(settings)),
     fontCompartment.of(fontExtension(settings.fontSize)),
     wrapCompartment.of(wrapExtension(settings.wrap)),
     typeCheckCompartment.of(typeCheckEnabled.of(settings.typeCheck)),
@@ -238,7 +242,7 @@ export function createEditorState({ content, settings, cursor, folds, indent }: 
 /** Effetti per allineare uno state alle impostazioni correnti (tema, font, a capo, controllo dei tipi). */
 export function settingsEffects(settings: EditorSettings) {
   return [
-    themeCompartment.reconfigure(themeExtension(settings.dark)),
+    themeCompartment.reconfigure(themeExtension(settings)),
     fontCompartment.reconfigure(fontExtension(settings.fontSize)),
     wrapCompartment.reconfigure(wrapExtension(settings.wrap)),
     typeCheckCompartment.reconfigure(typeCheckEnabled.of(settings.typeCheck)),

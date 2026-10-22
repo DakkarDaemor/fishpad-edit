@@ -11,6 +11,10 @@ interface Props {
   onModel: (model: NonNullable<AiSettings['model']>) => void
   /** contesto attuale, ricalcolato a ogni render: solo per l'etichetta */
   label: string | null
+  /** c'è una selezione: compaiono le domande pronte */
+  selection: boolean
+  /** cambia quando si chiede di scrivere una domanda: il cursore va nel campo */
+  focusKey: number
   /** la tab attiva al momento dell'invio */
   getContext: () => TabContext | null
   onInsert: (code: string) => void
@@ -27,11 +31,17 @@ interface Props {
 }
 
 const SEP = '\u0000'
+/** domande pronte sulla selezione */
+const QUICK: Array<[string, string]> = [
+  ['Spiega', 'Spiega cosa fa questa parte.'],
+  ['Migliora', 'Migliora questa parte: proponi la versione rivista e spiega in breve cosa hai cambiato.'],
+  ['Trova errori', 'Trova errori e problemi in questa parte. Se ce ne sono, proponi la versione corretta.'],
+]
 /** fuori dal componente: si chiama solo all'arrivo di una risposta, non durante il render */
 const now = () => Date.now()
 
 /** Chat a destra: ogni domanda porta con sé la tab attiva (e la selezione) in quel momento. */
-export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare, onOpenSettings, onClose, width, onResize, overlay, tabs, hidden }: Props) {
+export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext, onInsert, onCompare, onOpenSettings, onClose, width, onResize, overlay, tabs, hidden }: Props) {
   const [entries, setEntries] = useState<ChatEntry[]>([])
   /** la conversazione si salva a ogni risposta con questo id */
   const [chatId, setChatId] = useState<string>(() => crypto.randomUUID())
@@ -41,6 +51,7 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
   const [busy, setBusy] = useState<AbortController | null>(null)
   const [error, setError] = useState<string | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const resize = useSideResize(width, onResize)
 
   const usable = usableProviders(ai.providers)
@@ -51,8 +62,12 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight })
   }, [entries, busy])
 
-  async function send() {
-    const question = input.trim()
+  useEffect(() => {
+    if (focusKey) inputRef.current?.focus()
+  }, [focusKey])
+
+  async function send(text = input) {
+    const question = text.trim()
     if (!question || busy || !chosen) return
     const ctx = getContext()
     if (!ctx) {
@@ -64,7 +79,7 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
       setError(built.error)
       return
     }
-    const history = [...entries, { role: 'user' as const, content: question, context: contextLabel(ctx) }]
+    const history = [...entries, { role: 'user' as const, content: question, context: contextLabel(ctx), quote: ctx.selection?.text }]
     setEntries(history)
     setInput('')
     setError(null)
@@ -79,7 +94,7 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
     } catch (err) {
       // la domanda torna nel campo, così si può riprovare o cambiare modello
       setEntries((e) => e.slice(0, -1))
-      setInput(question)
+      if (text === input) setInput(question)
       if (!ac.signal.aborted) setError((err as Error).message)
     } finally {
       setBusy(null)
@@ -166,6 +181,7 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
                 e.role === 'user' ? (
                   <div key={i} className="chat-msg user">
                     {e.context && <div className="chat-context">{e.context}</div>}
+                    {e.quote && <Quote text={e.quote} />}
                     {e.content}
                   </div>
                 ) : (
@@ -197,7 +213,15 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
                   ))}
                 </select>
               </div>
+              {selection && !busy && (
+                <div className="chat-quick">
+                  {QUICK.map(([label, question]) => (
+                    <button key={label} onClick={() => void send(question)} title={question}>{label}</button>
+                  ))}
+                </div>
+              )}
               <textarea
+                ref={inputRef}
                 value={input}
                 rows={3}
                 placeholder="Invio per mandare, Shift+Invio per andare a capo"
@@ -219,6 +243,21 @@ export function ChatPanel({ ai, onModel, label, getContext, onInsert, onCompare,
         )}
       </aside>
     </>
+  )
+}
+
+const QUOTE_LINES = 3
+
+/** Il testo selezionato al momento della domanda: le prime righe, il resto a richiesta. */
+function Quote({ text }: { text: string }) {
+  const [open, setOpen] = useState(false)
+  const lines = text.split('\n')
+  const long = lines.length > QUOTE_LINES
+  return (
+    <div className="chat-quote">
+      <pre>{open || !long ? text : lines.slice(0, QUOTE_LINES).join('\n') + '\n…'}</pre>
+      {long && <button onClick={() => setOpen(!open)}>{open ? 'Mostra meno' : `Mostra tutto (${lines.length} righe)`}</button>}
+    </div>
   )
 }
 

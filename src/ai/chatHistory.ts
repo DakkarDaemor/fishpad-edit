@@ -4,6 +4,8 @@ import type { ChatMessage } from './providers'
 export interface ChatEntry extends ChatMessage {
   /** domande: su cosa è stata fatta (tab e righe) */
   context?: string
+  /** domande: il testo selezionato, per rivederlo anche quando il file è cambiato */
+  quote?: string
   /** risposte: chi l'ha data */
   provider?: string
   model?: string

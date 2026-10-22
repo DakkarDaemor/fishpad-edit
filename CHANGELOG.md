@@ -2,6 +2,14 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.0
+
+- Avviso di nuova versione: quando è uscito un aggiornamento compare "Nuova versione disponibile" con il pulsante Ricarica (o × per farlo più tardi). L'app non si ricarica più da sola, quindi non interrompe quello che stai facendo. Il controllo avviene all'avvio, ogni ora e quando l'app torna in primo piano: sul telefono basta riaprirla dalle app recenti, senza chiuderla del tutto.
+- Due temi nuovi in Impostazioni → Tema: **Dracula** (scuro) e **Solarized chiaro**, con i loro colori sia nell'editor sia nell'interfaccia. Chiaro, scuro e di sistema restano come prima.
+- **Chiedi all'AI sulla selezione** (`Ctrl+Shift+Alt+I`, anche da Visualizza e dalla palette dei comandi): apre la chat con il cursore già nel campo della domanda.
+- Chat: con del testo selezionato compaiono le domande pronte **Spiega**, **Migliora** e **Trova errori**, che si inviano con un tocco.
+- Chat: ogni domanda fatta su una selezione mostra il testo selezionato (le prime righe, il resto con "Mostra tutto"), e lo conserva nelle chat salvate anche se il file nel frattempo cambia.
+
 ## 12.1
 
 - Smartphone: aprendo un file nuovo (o cambiando tab) mentre la tastiera era aperta, la tastiera restava su ma il testo digitato non arrivava nell'editor. Ora si scrive subito nel file appena aperto.

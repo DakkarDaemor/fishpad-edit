@@ -6,6 +6,7 @@ import { EditorSelection } from '@codemirror/state'
 import { gotoLine, openSearchPanel } from '@codemirror/search'
 import { openReplacePanel, type EditorSettings } from './editor/setup'
 import { foldLevel } from './editor/folding'
+import { PALETTES, type Palette } from './editor/themes'
 import { detectByFilename, extensionFor } from './editor/languages'
 import { canFormat, formatCode } from './editor/format'
 import * as tx from './editor/transforms'
@@ -61,6 +62,7 @@ import { MenuBar, MobileMenu, type MenuDef, type MenuItem } from './components/M
 import { COARSE_QUERY, COMPACT_QUERY, useMediaQuery, useVisualViewport } from './components/touch'
 import { KeyBar } from './components/KeyBar'
 import { NoticeDialog } from './components/NoticeDialog'
+import { UpdateBanner } from './components/UpdateBanner'
 import { SplitView } from './components/SplitView'
 import { EditorPane } from './components/EditorPane'
 import { StatusBar } from './components/StatusBar'
@@ -100,7 +102,9 @@ interface DiffState {
 type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
 function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck'>, systemDark: boolean): EditorSettings {
-  return { dark: s.theme === 'dark' || (s.theme === 'system' && systemDark), fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck }
+  const palette = s.theme in PALETTES ? (s.theme as Palette) : null
+  const dark = palette ? PALETTES[palette].dark : s.theme === 'dark' || (s.theme === 'system' && systemDark)
+  return { dark, palette, fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck }
 }
 
 export default function App() {
@@ -124,6 +128,8 @@ export default function App() {
   const [chatOpen, setChatOpen] = useState(false)
   /** con anteprima e chat aperte insieme, quale si vede nella colonna destra */
   const [rightTab, setRightTab] = useState<'preview' | 'chat'>('preview')
+  /** sale a ogni "Chiedi all'AI": la chat mette il cursore nel campo */
+  const [chatFocus, setChatFocus] = useState(0)
   const [help, setHelp] = useState<HelpView | null>(null)
   /** Cartella dell'esplora file; l'anteprima HTML carica da qui CSS, script e immagini referenziati dalla pagina */
   const [folder, setFolderState] = useState<FileSystemDirectoryHandle | null>(null)
@@ -771,6 +777,14 @@ export default function App() {
     setPreviewHidden(false)
   }
 
+  /** Apre la chat con il cursore nel campo della domanda: riguarda la selezione, se c'è. */
+  function askAi() {
+    setChatOpen(true)
+    setRightTab('chat')
+    setPreviewHidden(false)
+    setChatFocus((n) => n + 1)
+  }
+
   /** Codice della chat al cursore, o al posto della selezione (annullabile con Ctrl+Z). */
   function insertCode(code: string) {
     const v = wb.activeView
@@ -872,7 +886,7 @@ export default function App() {
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat, gotoDocLine }
+  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat, askAi, gotoDocLine }
   const actions = useRef(all)
   useEffect(() => {
     actions.current = all
@@ -946,6 +960,7 @@ export default function App() {
       else if (mod && !e.shiftKey && !e.altKey && code === 'KeyB') a.toggleSidebar()
       else if (mod && !e.shiftKey && !e.altKey && code === 'Comma') setSettingsView('look')
       else if (mod && e.altKey && !e.shiftKey && code === 'KeyI') a.toggleChat()
+      else if (mod && e.altKey && e.shiftKey && code === 'KeyI') a.askAi()
       // F5 ripete la richiesta di una tab URL; altrove resta al browser
       else if (e.key === 'F5' && !mod && !e.altKey && !e.shiftKey && wb.activeDoc?.request) void a.refreshUrl()
       // negli altri file Ctrl+Enter resta all'editor (riga vuota sotto)
@@ -1086,6 +1101,8 @@ export default function App() {
   const editorSettings = useMemo(() => toEditorSettings({ theme, fontSize, wrap, typeCheck }, systemDark), [theme, fontSize, wrap, typeCheck, systemDark])
   useEffect(() => {
     document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
+    if (editorSettings.palette) document.documentElement.dataset.palette = editorSettings.palette
+    else delete document.documentElement.dataset.palette
     wb.setEditorSettings(editorSettings)
     if (settingsLoaded.current) void saveSettings(settings)
   }, [wb, settings, editorSettings])
@@ -1265,6 +1282,7 @@ export default function App() {
         'separator',
         { label: 'Console', checked: consoleOpen, action: () => setConsoleOpen((o) => !o) },
         { label: 'Chat AI', shortcut: 'Ctrl+Alt+I', checked: chatOpen, action: toggleChat },
+        { label: "Chiedi all'AI sulla selezione", shortcut: 'Ctrl+Shift+Alt+I', disabled: !active, action: askAi },
         'separator',
         { label: 'Impostazioni…', shortcut: 'Ctrl+,', action: () => setSettingsView('look') },
       ],
@@ -1471,6 +1489,8 @@ export default function App() {
             ai={settings.ai}
             onModel={(model) => setSettings((s) => ({ ...s, ai: { ...s.ai, model } }))}
             label={chatLabel}
+            selection={!!chatContext?.selection}
+            focusKey={chatFocus}
             getContext={() => tabContext()}
             onInsert={insertCode}
             onCompare={compareCode}
@@ -1567,6 +1587,7 @@ export default function App() {
       )}
 
       {toast && <div className="toast" role="status">{toast}</div>}
+      <UpdateBanner />
       {dragging && <div className="drop-overlay">Rilascia per aprire</div>}
     </div>
   )

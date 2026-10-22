@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createClient, type AiProvider } from '../ai/providers'
 import type { Settings, ThemeMode } from '../store'
+import { PALETTES, type Palette } from '../editor/themes'
 
 export type SettingsView = 'look' | 'diff' | 'ai'
 
@@ -16,6 +17,7 @@ const THEMES: Array<[ThemeMode, string]> = [
   ['system', 'Sistema'],
   ['light', 'Chiaro'],
   ['dark', 'Scuro'],
+  ...Object.entries(PALETTES).map(([value, p]) => [value as Palette, p.label] as [ThemeMode, string]),
 ]
 
 /** Impostazioni: aspetto dell'editor, confronto e chiavi dei provider AI. */

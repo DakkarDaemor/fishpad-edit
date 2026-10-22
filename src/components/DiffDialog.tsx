@@ -47,7 +47,7 @@ function extensions(settings: EditorSettings, lang: Extension, readOnly: boolean
     history(),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-    themeExtension(settings.dark),
+    themeExtension(settings),
     fontExtension(settings.fontSize),
     wrapExtension(settings.wrap),
     lang,

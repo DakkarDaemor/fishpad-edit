@@ -45,6 +45,33 @@
   --tab-edge: 0%;
   color-scheme: dark;
 }
+/* temi con colori propri: chiaro o scuro resta in data-theme, qui solo i colori che cambiano */
+:root[data-palette='solarized-light'] {
+  --bg: #eee8d5;
+  --bg-editor: #fdf6e3;
+  --bg-chrome: #eee8d5;
+  --bg-hover: #e4ddc7;
+  --fg: #586e75;
+  --fg-muted: #839496;
+  --border: #ddd6c1;
+  --accent: #268bd2;
+  --active-line: rgb(7 54 66 / 0.05);
+  --selection: #d5e3e8;
+  --danger: #dc322f;
+}
+:root[data-palette='dracula'] {
+  --bg: #21222c;
+  --bg-editor: #282a36;
+  --bg-chrome: #21222c;
+  --bg-hover: #343746;
+  --fg: #f8f8f2;
+  --fg-muted: #9aa2c4;
+  --border: #191a21;
+  --accent: #bd93f9;
+  --active-line: rgb(68 71 90 / 0.45);
+  --selection: #44475a;
+  --danger: #ff5555;
+}
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -250,6 +277,10 @@ select { border-color: var(--border); background: var(--bg-editor); }
   position: fixed; right: 16px; bottom: 40px; z-index: 30; padding: 8px 14px; border-radius: 6px;
   background: var(--fg); color: var(--bg-editor); box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
 }
+/* sopra il toast, che resta libero per gli altri messaggi */
+.update-banner { bottom: 84px; display: flex; align-items: center; gap: 10px; }
+.update-banner button { padding: 4px 12px; font: inherit; border-radius: 4px; border: 0; cursor: pointer; }
+.update-banner button:last-child { background: transparent; color: inherit; font-size: 16px; padding: 2px 6px; }
 .drop-overlay {
   position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; pointer-events: none;
   font-size: 20px; color: var(--accent); background: color-mix(in srgb, var(--bg) 70%, transparent);
@@ -357,6 +388,11 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .chat-empty p { margin: 0 0 8px; }
 .chat-msg { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .chat-msg.user { align-self: flex-end; max-width: 90%; padding: 6px 10px; border-radius: 8px; white-space: pre-wrap; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.chat-quote { margin: 4px 0 6px; white-space: normal; }
+.chat-quote pre { margin: 0; padding: 4px 8px; max-height: 40vh; overflow: auto; border-left: 3px solid var(--accent); font: 12px/1.4 var(--font-mono); white-space: pre-wrap; color: var(--fg-muted); }
+.chat-quote button { padding: 0; border: 0; background: none; color: var(--accent); font-size: 11px; cursor: pointer; }
+.chat-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.chat-quick button { padding: 2px 10px; font-size: 12px; border-radius: 12px; border-color: var(--border); }
 .chat-msg.busy { color: var(--fg-muted); font-style: italic; }
 .chat-context { display: block; font-size: 11px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-md > :first-child { margin-top: 0; }

@@ -1,4 +1,5 @@
 /// <reference types="vite-plugin-pwa/client" />
+/// <reference types="vite-plugin-pwa/react" />
 /// <reference types="wicg-file-system-access" />
 
 /** Versione MAJOR.MINOR, iniettata da vite.config.ts */

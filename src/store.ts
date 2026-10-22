@@ -3,13 +3,14 @@ import type { Encoding } from './encoding'
 import type { Indent } from './editor/indentation'
 import type { SaveCleanup } from './editor/transforms'
 import type { Layout } from './workbench/layout'
+import type { Palette } from './editor/themes'
 import type { TabColor } from './workbench/tabColors'
 import type { UrlRequest, UrlResponse } from './remote'
 import { packHandle, unpackHandle, type StoredHandle } from './workspace'
 import { DEFAULT_PROVIDERS, mergeProviders, type AiProvider } from './ai/providers'
 
 export type Eol = 'LF' | 'CRLF'
-export type ThemeMode = 'system' | 'light' | 'dark'
+export type ThemeMode = 'system' | 'light' | 'dark' | Palette
 
 export interface Settings {
   theme: ThemeMode

@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.6
+
+- Smartphone Android: aprendo un file nuovo o cambiando tab, la tastiera continuava per qualche secondo a lavorare sul file precedente (suggerimenti vuoti, testo che non compariva). Corretta la causa: ora la tastiera riceve subito il contenuto del file aperto.
+
 ## 13.5
 
 - Smartphone Android: aprendo un file nuovo con la tastiera aperta, a volte il testo digitato non arrivava nell'editor finché non si toccava di nuovo. Ora la tastiera si ricollega al file nuovo. Se in quel momento si chiude, basta un tocco nell'editor per riaprirla.

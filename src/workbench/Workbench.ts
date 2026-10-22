@@ -604,13 +604,12 @@ export class Workbench {
       if (focus) view.focus()
       return
     }
-    // setState con il focus dentro lascia la tastiera Android agganciata al vecchio contenuto: si digita a vuoto
-    const hadFocus = view.hasFocus
-    if (hadFocus) view.contentDOM.blur()
     view.setState(st)
+    // Su Android CodeMirror passa il testo alla tastiera con un EditContext, che setState non aggiorna:
+    // la tastiera vedeva ancora il file precedente e si digitava a vuoto finché qualcosa non lo riallineava.
+    // shortcut: API interna di @codemirror/view (6.43), se cambia il ?. la rende un no-op: ricontrollare agli aggiornamenti
+    ;(view as unknown as { observer?: { editContext?: { reset(s: EditorState): void } | null } }).observer?.editContext?.reset(view.state)
     view.dispatch({ effects: settingsEffects(this.settings) })
-    // il focus ridato subito non basta: Android stacca la tastiera solo dopo che il blur è stato elaborato
-    if (hadFocus) setTimeout(() => view.focus(), 50)
     const top = this.scrolls.get(k)
     if (top != null) requestAnimationFrame(() => (view.scrollDOM.scrollTop = top))
     else view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })

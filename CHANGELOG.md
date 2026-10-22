@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.2
+
+- Avviso di nuova versione: in alcuni casi (per esempio dopo aver ricaricato con Ctrl+F5) il pulsante Ricarica non faceva nulla. Ora ricarica sempre l'app con la versione nuova.
+
 ## 13.1
 
 - Chat AI: una chiave incollata tra virgolette o con "Bearer " davanti veniva rifiutata (OpenRouter rispondeva "Missing Authentication header"). Ora si usa pulita, e quando il provider rifiuta la chiave il messaggio dice di controllarla in Impostazioni → AI.

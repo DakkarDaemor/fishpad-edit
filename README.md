@@ -37,8 +37,8 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Suggerimenti** mentre scrivi (`Ctrl+Spazio` per richiamarli): tag e attributi HTML, proprietà CSS, parole chiave e snippet JS/TS.
 - **Emmet** in HTML, JSX/TSX, CSS, SCSS, LESS e simili: si scrive un'abbreviazione (`ul>li*3`, `m10`) e `Tab` la espande, `Ctrl+E` la forza.
 - **Colori CSS**: un quadratino accanto a ogni colore nei fogli di stile e in HTML; cliccandolo si apre il selettore del sistema, e il valore viene riscritto nello stesso formato (hex, `rgb()`, `hsl()`), mantenendo la trasparenza.
-- **Controllo JSON**: gli errori di sintassi sono sottolineati e segnati nel margine.
-- **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown e YAML. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
+- **Controllo JSON e PHP**: gli errori di sintassi sono sottolineati e segnati nel margine (per PHP solo la sintassi, non funzioni o classi inesistenti).
+- **Formatta documento** (`Shift+Alt+F`, o Modifica → Formatta documento) con Prettier, per JavaScript, TypeScript, JSX/TSX, JSON, CSS/SCSS/LESS, HTML, Vue, Markdown, YAML e PHP. Rispetta l'indentazione del file, si annulla con `Ctrl+Z`, e Prettier si scarica solo al primo uso (poi resta disponibile offline).
 - **Trasforma** (Modifica → Trasforma): ordina, inverti o togli i duplicati delle righe, togli gli spazi a fine riga, MAIUSCOLO / minuscolo, codifica e decodifica Base64 e URL, e per il JSON ordina le chiavi o minifica (senza arrotondare i numeri grandi). Agisce sulla selezione o, se non c'è, su tutto il file; si annulla con `Ctrl+Z`.
 - **Al salvataggio** (Impostazioni → Aspetto, spenti all'inizio): togli gli spazi a fine riga (non nel Markdown, dove due spazi vanno a capo) e termina il file con un a capo.
 - **Confronta** (Modifica → Confronta): la tab contro la versione su disco, un'altra tab, gli appunti o un file, affiancati o in vista unificata, con le differenze evidenziate dentro la riga e le righe uguali piegate. A destra si modifica e le frecce portano i blocchi dall'altro lato; "Ignora formattazione" passa i testi da Prettier per nascondere le differenze di sola formattazione.
@@ -124,7 +124,7 @@ npm test          # test unitari (vitest)
 
 I test (`+ nome.test.ts` nell'elenco qui sotto) stanno nella sottocartella `__tests__` della cartella del codice che provano.
 
-Stack: Vite, React, TypeScript (anche nell'app, per il controllo dei tipi), CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier, `marked`, Emmet, `@anthropic-ai/sdk` (solo per il provider Anthropic).
+Stack: Vite, React, TypeScript (anche nell'app, per il controllo dei tipi), CodeMirror 6 (con `@codemirror/merge` per il confronto), `vite-plugin-pwa`, `idb-keyval`, `sucrase`, Prettier (con `@prettier/plugin-php`), `php-parser`, `marked`, Emmet, `@anthropic-ai/sdk` (solo per il provider Anthropic).
 
 ```
 src/
@@ -160,7 +160,8 @@ src/
   editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
   editor/detect.ts     riconoscimento dal contenuto (+ detect.test.ts)
   editor/indentation.ts rilevamento e conversione tab/spazi
-  editor/web.ts        Emmet, colori CSS, controllo JSON e dei tipi, caricati in base al linguaggio
+  editor/web.ts        Emmet, colori CSS, controllo JSON, PHP e dei tipi, caricati in base al linguaggio
+  editor/phpLint.ts    errori di sintassi PHP con php-parser (+ php.test.ts)
   editor/typecheck.ts  language service TS/TSX: file system virtuale, librerie, tipi da esm.sh, errori, suggerimenti (+ typecheck.test.ts)
   editor/typeLint.ts   worker del controllo dei tipi (typecheck.worker.ts): linter, suggerimenti e tipo sotto il mouse
   editor/colors.ts     quadratini e selettore dei colori CSS (calcoli in colorValue.ts)

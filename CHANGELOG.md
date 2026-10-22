@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.7
+
+- PHP: **Formatta documento** (`Shift+Alt+F`) ora funziona anche sui file PHP, e gli errori di sintassi sono sottolineati e segnati nel margine mentre scrivi.
+
 ## 13.6
 
 - Smartphone Android: aprendo un file nuovo o cambiando tab, la tastiera continuava per qualche secondo a lavorare sul file precedente (suggerimenti vuoti, testo che non compariva). Corretta la causa: ora la tastiera riceve subito il contenuto del file aperto.

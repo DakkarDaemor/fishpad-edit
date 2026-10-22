@@ -1,7 +1,7 @@
 {
   "name": "fishpad-edit",
   "private": true,
-  "version": "13.6.0",
+  "version": "13.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -27,11 +27,13 @@
     "@emmetio/codemirror6-plugin": "^0.4.1",
     "@lezer/common": "^1.5.3",
     "@lezer/highlight": "^1.2.5",
+    "@prettier/plugin-php": "^0.26.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "codemirror": "^6.0.2",
     "idb-keyval": "^6.3.0",
     "marked": "^18.1.1",
+    "php-parser": "^3.7.0",
     "prettier": "^3.9.10",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

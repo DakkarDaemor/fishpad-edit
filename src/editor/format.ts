@@ -1,7 +1,7 @@
 import type { Plugin } from 'prettier'
 import type { Indent } from './indentation'
 
-type PluginName = 'babel' | 'estree' | 'typescript' | 'postcss' | 'html' | 'markdown' | 'yaml'
+type PluginName = 'babel' | 'estree' | 'typescript' | 'postcss' | 'html' | 'markdown' | 'yaml' | 'php'
 
 // Import statici nelle funzioni: Vite crea un chunk per plugin, scaricato solo quando serve
 const PLUGINS: Record<PluginName, () => Promise<Plugin>> = {
@@ -12,6 +12,7 @@ const PLUGINS: Record<PluginName, () => Promise<Plugin>> = {
   html: () => import('prettier/plugins/html'),
   markdown: () => import('prettier/plugins/markdown'),
   yaml: () => import('prettier/plugins/yaml'),
+  php: () => import('@prettier/plugin-php/standalone') as Promise<Plugin>,
 }
 
 const JS: PluginName[] = ['babel', 'estree']
@@ -20,7 +21,7 @@ const TS: PluginName[] = ['typescript', 'estree']
 const MARKUP: PluginName[] = ['html', 'postcss', 'babel', 'estree']
 
 /** Parser Prettier e plugin per ogni linguaggio (nomi di @codemirror/language-data). */
-const FORMATTERS: Record<string, { parser: string; plugins: PluginName[] }> = {
+const FORMATTERS: Record<string, { parser: string; plugins: PluginName[]; options?: Record<string, string> }> = {
   JavaScript: { parser: 'babel', plugins: JS },
   JSX: { parser: 'babel', plugins: JS },
   TypeScript: { parser: 'typescript', plugins: TS },
@@ -33,6 +34,8 @@ const FORMATTERS: Record<string, { parser: string; plugins: PluginName[] }> = {
   Vue: { parser: 'vue', plugins: MARKUP },
   Markdown: { parser: 'markdown', plugins: ['markdown'] },
   YAML: { parser: 'yaml', plugins: ['yaml'] },
+  // con la versione "auto" (default) il plugin cerca composer.json su disco con fs, che nel browser non c'è
+  PHP: { parser: 'php', plugins: ['php'], options: { phpVersion: '8.5' } },
 }
 
 export const canFormat = (lang: string | null | undefined) => !!lang && lang in FORMATTERS
@@ -43,6 +46,7 @@ export async function formatCode(code: string, lang: string, cursor: number, ind
   if (!f) throw new Error(`Formattazione non disponibile per ${lang}`)
   const [prettier, ...plugins] = await Promise.all([import('prettier/standalone'), ...f.plugins.map((p) => PLUGINS[p]())])
   return prettier.formatWithCursor(code, {
+    ...f.options,
     parser: f.parser,
     plugins,
     cursorOffset: cursor,

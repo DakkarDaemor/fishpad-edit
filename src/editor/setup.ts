@@ -1,7 +1,9 @@
 import { Compartment, EditorSelection, EditorState, type Extension } from '@codemirror/state'
 import {
+  Direction,
   EditorView,
   crosshairCursor,
+  type Rect,
   drawSelection,
   dropCursor,
   highlightActiveLine,
@@ -35,6 +37,34 @@ import { loadLanguage } from './languages'
 import { DEFAULT_INDENT, indentCompartment, indentExtension, type Indent } from './indentation'
 import { webExtensions } from './web'
 import { typeCheckEnabled } from './typeLint'
+
+/**
+ * Posizione della spiegazione di un suggerimento: accanto alla lista se c'è spazio, altrimenti sotto o sopra
+ * la lista intera. Il default di CodeMirror, sugli schermi stretti, la metteva sotto la voce evidenziata,
+ * coprendo le voci seguenti.
+ */
+export function infoBesideList(view: EditorView, list: Rect, option: Rect, info: Rect, space: Rect) {
+  const rtl = view.textDirection === Direction.RTL
+  const spaceLeft = list.left - space.left
+  const spaceRight = space.right - list.right
+  const infoWidth = info.right - info.left
+  const infoHeight = info.bottom - info.top
+  const listHeight = list.bottom - list.top
+  let left = rtl
+  if (left && spaceLeft < Math.min(infoWidth, spaceRight)) left = false
+  else if (!left && spaceRight < Math.min(infoWidth, spaceLeft)) left = true
+  const side = left ? spaceLeft : spaceRight
+  if (infoWidth <= side) {
+    const top = Math.max(space.top, Math.min(option.top, space.bottom - infoHeight)) - list.top
+    return { style: `top: ${top}px; max-width: ${Math.min(400, side)}px`, class: `cm-completionInfo-${left ? 'left' : 'right'}` }
+  }
+  const maxWidth = Math.min(400, (rtl ? list.right : space.right - list.left) - 30)
+  const below = space.bottom - list.bottom >= infoHeight || space.bottom - list.bottom > list.top - space.top
+  return {
+    style: `${below ? 'top' : 'bottom'}: ${listHeight}px; max-width: ${maxWidth}px`,
+    class: `cm-completionInfo-${rtl ? 'left' : 'right'}-narrow`,
+  }
+}
 
 export const languageCompartment = new Compartment()
 export const indentFoldCompartment = new Compartment()
@@ -161,7 +191,7 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     bracketMatching(),
     closeBrackets(),
     // suggerimenti dei linguaggi caricati (tag HTML, proprietà CSS, parole chiave e snippet JS/TS…): Invio accetta
-    autocompletion(),
+    autocompletion({ positionInfo: infoBesideList }),
     rectangularSelection(),
     crosshairCursor(),
     highlightActiveLine(),

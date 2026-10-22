@@ -2,6 +2,13 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 12.1
+
+- Smartphone: aprendo un file nuovo (o cambiando tab) mentre la tastiera era aperta, la tastiera restava su ma il testo digitato non arrivava nell'editor. Ora si scrive subito nel file appena aperto.
+- Smartphone: l'elenco delle scorciatoie (e le scorciatoie nella palette dei comandi) non allarga più la finestra oltre lo schermo; le combinazioni lunghe vanno a capo.
+- JSX e TSX: le abbreviazioni Emmet scrivono i tag vuoti chiusi (`<br />`, `<img … />`) invece di `<br>`, che in JSX è un errore.
+- Suggerimenti: quando accanto alla lista non c'è spazio (schermi stretti), la spiegazione della voce evidenziata compare sotto o sopra la lista intera invece di coprire le voci seguenti, che restano visibili e scorribili.
+
 ## 12.0
 
 - Pacchetti npm nel playground: in console (JavaScript e TypeScript) e nell'anteprima JSX/TSX si può importare qualunque pacchetto npm, anche con versione o sottopercorso (`import dayjs from 'dayjs'`, `lodash@4/fp`), o un URL completo. I moduli arrivano da esm.sh prima che il codice parta, quindi serve la rete; mentre si scaricano la console mostra quali sono, e se uno non si carica dice quale. Nell'anteprima, con un pacchetto npm anche React arriva da esm.sh, nella stessa versione dell'app, così hook e componenti dei pacchetti funzionano; senza, React resta quello dell'app e funziona offline.

@@ -275,7 +275,8 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .palette li kbd { margin-left: auto; }
 .palette-empty { color: var(--fg-muted); cursor: default !important; }
 .palette kbd, .help kbd {
-  padding: 0 5px; font: 11px var(--font-mono); color: var(--fg-muted); white-space: nowrap;
+  /* va a capo solo agli spazi: sul telefono "Ctrl+Tab / Ctrl+Shift+Tab, …" allargava la finestra */
+  padding: 0 5px; font: 11px var(--font-mono); color: var(--fg-muted);
   border: 1px solid var(--border); border-radius: 3px; background: var(--bg);
 }
 

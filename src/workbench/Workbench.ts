@@ -604,8 +604,12 @@ export class Workbench {
       if (focus) view.focus()
       return
     }
+    // setState con il focus dentro lascia la tastiera Android agganciata al vecchio contenuto: si digita a vuoto
+    const hadFocus = view.hasFocus
+    if (hadFocus) view.contentDOM.blur()
     view.setState(st)
     view.dispatch({ effects: settingsEffects(this.settings) })
+    focus ||= hadFocus
     const top = this.scrolls.get(k)
     if (top != null) requestAnimationFrame(() => (view.scrollDOM.scrollTop = top))
     else view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })

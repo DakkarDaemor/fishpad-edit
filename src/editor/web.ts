@@ -33,7 +33,11 @@ export async function webExtensions(lang: string | null): Promise<Extension> {
   if (syntax) {
     const { abbreviationTracker, expandAbbreviation, EmmetKnownSyntax } = await import('@emmetio/codemirror6-plugin')
     exts.push(
-      abbreviationTracker({ syntax: syntax as (typeof EmmetKnownSyntax)[keyof typeof EmmetKnownSyntax] }),
+      abbreviationTracker({
+        syntax: syntax as (typeof EmmetKnownSyntax)[keyof typeof EmmetKnownSyntax],
+        // in JSX i tag vuoti vanno chiusi (`<br />`): di default Emmet scrive `<br>`, che non compila
+        config: { jsx: { options: { 'output.selfClosingStyle': 'xhtml' } }, tsx: { options: { 'output.selfClosingStyle': 'xhtml' } } },
+      }),
       keymap.of([{ key: 'Mod-e', run: expandAbbreviation }]),
     )
   }

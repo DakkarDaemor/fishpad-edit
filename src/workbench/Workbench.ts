@@ -609,7 +609,8 @@ export class Workbench {
     if (hadFocus) view.contentDOM.blur()
     view.setState(st)
     view.dispatch({ effects: settingsEffects(this.settings) })
-    focus ||= hadFocus
+    // il focus ridato subito non basta: Android stacca la tastiera solo dopo che il blur è stato elaborato
+    if (hadFocus) setTimeout(() => view.focus(), 50)
     const top = this.scrolls.get(k)
     if (top != null) requestAnimationFrame(() => (view.scrollDOM.scrollTop = top))
     else view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: 'center' }) })

@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.4
+
+- Impostazioni → Aspetto: sul telefono la dimensione del testo non si poteva cambiare. Ora si sceglie da un elenco (da 10 a 32 px).
+
 ## 13.3
 
 - Quattro temi nuovi in Impostazioni → Tema: **Solarized scuro**, **Monokai Dimmed**, **Abyss** e **Tomorrow Night Blue**, con i colori sia nell'editor sia nell'interfaccia.

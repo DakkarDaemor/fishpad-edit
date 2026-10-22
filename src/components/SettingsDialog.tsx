@@ -13,6 +13,9 @@ interface Props {
   onClose: () => void
 }
 
+/** gli stessi limiti di Ingrandisci / Riduci testo */
+const FONT_SIZES = Array.from({ length: 23 }, (_, i) => i + 10)
+
 const THEMES: Array<[ThemeMode, string]> = [
   ['system', 'Sistema'],
   ['light', 'Chiaro'],
@@ -65,16 +68,12 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
               </label>
               <label>
                 Dimensione del testo (px)
-                <input
-                  type="number"
-                  min={10}
-                  max={32}
-                  value={settings.fontSize}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    if (n >= 10 && n <= 32) onChange({ fontSize: n })
-                  }}
-                />
+                {/* un campo numerico rifiutava i valori intermedi mentre si scrive ("1" verso "16"): sul telefono non si poteva cambiare */}
+                <select value={settings.fontSize} onChange={(e) => onChange({ fontSize: Number(e.target.value) })}>
+                  {FONT_SIZES.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
               </label>
               <label className="check">
                 <input type="checkbox" checked={settings.wrap} onChange={(e) => onChange({ wrap: e.target.checked })} /> A capo automatico

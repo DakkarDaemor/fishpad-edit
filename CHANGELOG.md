@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.8
+
+- PHP: nella 13.7 i file PHP restavano senza colori, perché il controllo della sintassi non partiva nel browser e bloccava anche la colorazione. Ora funzionano entrambi, e se in futuro uno strumento di un linguaggio non si carica, i colori restano comunque.
+
 ## 13.7
 
 - PHP: **Formatta documento** (`Shift+Alt+F`) ora funziona anche sui file PHP, e gli errori di sintassi sono sottolineati e segnati nel margine mentre scrivi.

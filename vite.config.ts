@@ -20,7 +20,8 @@ const TEXT_EXTENSIONS = [
 
 export default defineConfig({
   base,
-  define: { __APP_VERSION__: JSON.stringify(appVersion) },
+  // php-parser legge process.arch (che nel browser non c'è) per la dimensione degli interi
+  define: { __APP_VERSION__: JSON.stringify(appVersion), 'process.arch': JSON.stringify('x64') },
   // il chunk più grande è il compilatore TypeScript del controllo dei tipi, caricato nel suo worker solo con un file TS aperto
   build: { chunkSizeWarningLimit: 4000 },
   // il worker del controllo dei tipi carica le librerie .d.ts a pezzi (import dinamici)

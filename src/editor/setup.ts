@@ -251,9 +251,11 @@ export function settingsEffects(settings: EditorSettings) {
 
 /** Effetti per impostare il linguaggio (null = testo semplice). */
 export async function languageEffects(name: string | null) {
-  const [loaded, web] = await Promise.all([name ? loadLanguage(name) : null, webExtensions(name)])
+  // se uno strumento (linter, Emmet…) non si carica, la colorazione deve restare
+  const web = webExtensions(name).catch((e: unknown) => (console.error(e), []))
+  const [loaded, webExt] = await Promise.all([name ? loadLanguage(name) : null, web])
   return [
-    webCompartment.reconfigure(web),
+    webCompartment.reconfigure(webExt),
     languageCompartment.reconfigure(loaded ? loaded.support : []),
     // Con parser Lezer il folding viene dall'albero sintattico; altrimenti dall'indentazione.
     indentFoldCompartment.reconfigure(!loaded || loaded.legacy ? indentationFolding : []),

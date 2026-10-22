@@ -42,6 +42,15 @@ export function mergeProviders(saved: AiProvider[] | undefined): AiProvider[] {
 /** Provider con chiave e almeno un modello: quelli selezionabili nella chat. */
 export const usableProviders = (providers: AiProvider[]) => providers.filter((p) => p.apiKey.trim() && p.models.length)
 
+/** La chiave come va nell'header: senza spazi, virgolette o "Bearer " incollati insieme (OpenRouter li rifiuta come "header mancante"). */
+export function cleanKey(key: string) {
+  return key
+    .trim()
+    .replace(/^bearer\s+/i, '')
+    .replace(/^(["'])(.*)\1$/, '$2')
+    .trim()
+}
+
 export function createClient(p: AiProvider): AiClient {
   return p.kind === 'anthropic' ? anthropicClient(p) : openAiClient(p)
 }
@@ -57,12 +66,15 @@ function toText(content: unknown): string {
 
 function openAiClient({ baseUrl, apiKey }: AiProvider): AiClient {
   const base = baseUrl.trim().replace(/\/+$/, '')
-  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey.trim()}` }
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${cleanKey(apiKey)}` }
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await fetch(base + path, { ...init, headers })
     const body = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(body?.error?.message ?? body?.[0]?.error?.message ?? `HTTP ${res.status}`)
+    if (!res.ok) {
+      const msg = body?.error?.message ?? body?.[0]?.error?.message ?? `HTTP ${res.status}`
+      throw new Error(res.status === 401 ? `Chiave rifiutata (${msg}): controllala in Impostazioni → AI` : msg)
+    }
     return body as T
   }
 
@@ -95,7 +107,7 @@ function anthropicClient(p: AiProvider): AiClient {
   const client = async () => {
     const Anthropic = await sdk()
     // la chiave è dell'utente e resta nel suo browser: è il caso d'uso previsto da questa opzione
-    return new Anthropic({ apiKey: p.apiKey.trim(), baseURL: p.baseUrl.trim() || undefined, dangerouslyAllowBrowser: true })
+    return new Anthropic({ apiKey: cleanKey(p.apiKey), baseURL: p.baseUrl.trim() || undefined, dangerouslyAllowBrowser: true })
   }
 
   /** Messaggi d'errore comprensibili per i casi più comuni. */

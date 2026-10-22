@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_PROVIDERS, createClient, mergeProviders, usableProviders, type AiProvider } from '../providers'
+import { DEFAULT_PROVIDERS, cleanKey, createClient, mergeProviders, usableProviders, type AiProvider } from '../providers'
 
 const groq: AiProvider = { ...DEFAULT_PROVIDERS.find((p) => p.id === 'groq')!, apiKey: ' k ', models: ['m'] }
 
@@ -40,5 +40,14 @@ describe('mergeProviders', () => {
 
   it('usableProviders: servono chiave e modelli', () => {
     expect(usableProviders(mergeProviders([{ ...groq, apiKey: 'x', models: ['y'] }])).map((p) => p.id)).toEqual(['groq'])
+  })
+})
+
+describe('cleanKey', () => {
+  it('toglie spazi, "Bearer " e virgolette incollati con la chiave', () => {
+    expect(cleanKey('  sk-or-v1-abc \n')).toBe('sk-or-v1-abc')
+    expect(cleanKey('Bearer sk-or-v1-abc')).toBe('sk-or-v1-abc')
+    expect(cleanKey('"sk-or-v1-abc"')).toBe('sk-or-v1-abc')
+    expect(cleanKey("'sk-or-v1-abc'")).toBe('sk-or-v1-abc')
   })
 })

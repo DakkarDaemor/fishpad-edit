@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 13.3
+
+- Quattro temi nuovi in Impostazioni → Tema: **Solarized scuro**, **Monokai Dimmed**, **Abyss** e **Tomorrow Night Blue**, con i colori sia nell'editor sia nell'interfaccia.
+
 ## 13.2
 
 - Avviso di nuova versione: in alcuni casi (per esempio dopo aver ricaricato con Ctrl+F5) il pulsante Ricarica non faceva nulla. Ora ricarica sempre l'app con la versione nuova.

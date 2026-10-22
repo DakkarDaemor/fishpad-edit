@@ -4,11 +4,15 @@ import { EditorView } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 
 /** Temi oltre a chiaro e scuro. I colori dell'interfaccia sono in styles.css, sotto [data-palette]. */
-export type Palette = 'solarized-light' | 'dracula'
+export type Palette = 'solarized-light' | 'solarized-dark' | 'dracula' | 'monokai-dimmed' | 'abyss' | 'tomorrow-night-blue'
 
 export const PALETTES: Record<Palette, { label: string; dark: boolean }> = {
   'solarized-light': { label: 'Solarized chiaro', dark: false },
+  'solarized-dark': { label: 'Solarized scuro', dark: true },
   dracula: { label: 'Dracula', dark: true },
+  'monokai-dimmed': { label: 'Monokai Dimmed', dark: true },
+  abyss: { label: 'Abyss', dark: true },
+  'tomorrow-night-blue': { label: 'Tomorrow Night Blue', dark: true },
 }
 
 interface Colors {
@@ -26,21 +30,24 @@ interface Colors {
   invalid: string
 }
 
+const SOLARIZED: Colors = {
+  comment: '#93a1a1',
+  keyword: '#859900',
+  string: '#2aa198',
+  number: '#d33682',
+  fn: '#268bd2',
+  type: '#b58900',
+  tag: '#268bd2',
+  attr: '#b58900',
+  prop: '#268bd2',
+  regexp: '#dc322f',
+  heading: '#cb4b16',
+  invalid: '#dc322f',
+}
+
 const COLORS: Record<Palette, Colors> = {
-  'solarized-light': {
-    comment: '#93a1a1',
-    keyword: '#859900',
-    string: '#2aa198',
-    number: '#d33682',
-    fn: '#268bd2',
-    type: '#b58900',
-    tag: '#268bd2',
-    attr: '#b58900',
-    prop: '#268bd2',
-    regexp: '#dc322f',
-    heading: '#cb4b16',
-    invalid: '#dc322f',
-  },
+  'solarized-light': SOLARIZED,
+  'solarized-dark': { ...SOLARIZED, comment: '#586e75' },
   dracula: {
     comment: '#6272a4',
     keyword: '#ff79c6',
@@ -54,6 +61,48 @@ const COLORS: Record<Palette, Colors> = {
     regexp: '#ff5555',
     heading: '#bd93f9',
     invalid: '#ff5555',
+  },
+  'monokai-dimmed': {
+    comment: '#9a9b99',
+    keyword: '#9872a2',
+    string: '#9aa83a',
+    number: '#6089b4',
+    fn: '#ce6700',
+    type: '#c7444a',
+    tag: '#6089b4',
+    attr: '#ce6700',
+    prop: '#c5c8c6',
+    regexp: '#d0b344',
+    heading: '#ce6700',
+    invalid: '#c7444a',
+  },
+  abyss: {
+    comment: '#384887',
+    keyword: '#225588',
+    string: '#22aa44',
+    number: '#f280d0',
+    fn: '#ddbb88',
+    type: '#ffeebb',
+    tag: '#4499ff',
+    attr: '#ddbb88',
+    prop: '#6688cc',
+    regexp: '#ff8800',
+    heading: '#ddbb88',
+    invalid: '#a22d44',
+  },
+  'tomorrow-night-blue': {
+    comment: '#7285b7',
+    keyword: '#ebbbff',
+    string: '#d1f1a9',
+    number: '#ffc58f',
+    fn: '#bbdaff',
+    type: '#ffeead',
+    tag: '#ff9da4',
+    attr: '#ffc58f',
+    prop: '#bbdaff',
+    regexp: '#99ffff',
+    heading: '#bbdaff',
+    invalid: '#ff9da4',
   },
 }
 

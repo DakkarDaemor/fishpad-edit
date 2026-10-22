@@ -46,7 +46,7 @@ Su desktop dà il meglio con Chromium (Chrome, Edge), che permette di salvare di
 - **Riapri tab chiusa** (`Alt+Shift+T`, o File → Riapri tab chiusa): le ultime 20, con il testo non salvato.
 - **Chat AI** (`Ctrl+Alt+I`): domande sulla tab attiva (o sulla parte selezionata) in un pannello a destra, con la propria chiave di OpenRouter, Groq, Google Gemini, OpenAI o Anthropic. Con `Ctrl+Shift+Alt+I` si chiede direttamente sulla selezione, e ci sono le domande pronte Spiega, Migliora e Trova errori; la selezione resta citata nella domanda. I blocchi di codice delle risposte si copiano, si inseriscono nel file o si confrontano con la tab. Le chat si salvano da sole e si riprendono da "Chat precedenti" (ultime 50, con provider e modello di ogni risposta). Le chiavi si impostano in **Impostazioni** (`Ctrl+,`), insieme a tema, font e opzioni del confronto; restano nel browser, in chiaro.
 - **Cerca e sostituisci** con regex, multi-cursore, selezione rettangolare (Alt+trascina)
-- **Tema** chiaro, scuro, di sistema, Dracula o Solarized chiaro e dimensione del font, in Impostazioni (`Ctrl+,`); a capo automatico (`Alt+Z`) e ingrandisci / riduci testo anche da Visualizza
+- **Tema** chiaro, scuro, di sistema, o uno tra Solarized chiaro e scuro, Dracula, Monokai Dimmed, Abyss e Tomorrow Night Blue e dimensione del font, in Impostazioni (`Ctrl+,`); a capo automatico (`Alt+Z`) e ingrandisci / riduci testo anche da Visualizza
 - **Barra di stato**: riga e colonna, selezione, linguaggio, fine riga LF/CRLF (conservato in salvataggio), codifica UTF-8 o Windows-1252. La codifica viene rilevata in apertura: se il file non è UTF-8 valido viene letto come Windows-1252, e il BOM UTF-8 viene rimosso. Il file si salva nella stessa codifica, e dalla barra di stato si può cambiare quella di salvataggio o riaprire il file con un'altra.
 
 ## Telefono e tablet
@@ -155,7 +155,7 @@ src/
   bookmarks.ts         preferiti: lista salvata in IndexedDB (+ bookmarks.test.ts)
   store.ts             IndexedDB: sessione (con migrazione dal formato v1), impostazioni, recenti, cartella, preferiti
   editor/setup.ts      estensioni CodeMirror e compartment (tema, font, linguaggio)
-  editor/themes.ts     temi con colori propri (Dracula, Solarized chiaro)
+  editor/themes.ts     temi con colori propri (Solarized, Dracula, Monokai Dimmed, Abyss, Tomorrow Night Blue)
   editor/folding.ts    folding per indentazione, chiusura per livello, (de)serializzazione
   editor/languages.ts  riconoscimento dal nome file e caricamento dei linguaggi
   editor/detect.ts     riconoscimento dal contenuto (+ detect.test.ts)

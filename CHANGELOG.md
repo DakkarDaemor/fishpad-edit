@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 14.1
+
+- Avviso di nuova versione: ora dice quale versione è arrivata (per esempio "Nuova versione 14.1 disponibile"), e non compare più quando la pagina aperta è già quella versione (per esempio dopo Ctrl+F5).
+
 ## 14.0
 
 - **Pannelli spostabili**: ogni pannello ha una maniglia ⠿ nella barra delle tab. Trascinandola su un altro pannello, al centro i due si scambiano di posto, su un bordo il pannello si sposta da quel lato.

@@ -28,6 +28,13 @@ export default defineConfig({
   worker: { format: 'es' },
   plugins: [
     react(),
+    // versione pubblicata, letta dall'avviso di aggiornamento (fuori dalla cache del service worker: niente .json nei globPatterns)
+    {
+      name: 'version-json',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: appVersion }) })
+      },
+    },
     VitePWA({
       // niente ricarica automatica: compare l'avviso "Nuova versione disponibile" (UpdateBanner)
       registerType: 'prompt',

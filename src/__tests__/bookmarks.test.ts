@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findDuplicate, moveItem } from '../bookmarks'
+import { findDuplicate, matches, moveItem } from '../bookmarks'
 import type { Bookmark } from '../store'
 
 describe('moveItem', () => {
@@ -22,5 +22,18 @@ describe('findDuplicate', () => {
     const list = [url('a', 'https://x.test/a'), url('b', 'https://x.test/b')]
     expect((await findDuplicate(list, url('n', 'https://x.test/b', [['A', '1']])))?.id).toBe('b')
     expect(await findDuplicate(list, url('n', 'https://x.test/c'))).toBeUndefined()
+  })
+})
+
+describe('matches', () => {
+  const api: Bookmark = { id: 'a', name: 'Utenti', kind: 'url', request: { url: 'https://api.test/users' } }
+  const file = { id: 'f', name: 'Note', kind: 'file', handle: { name: 'appunti.md' } } as Bookmark
+
+  it('cerca in nome, URL e nome del file, senza distinguere maiuscole', () => {
+    expect(matches(api, 'utenti')).toBe(true)
+    expect(matches(api, ' API.TEST ')).toBe(true)
+    expect(matches(file, 'appunti')).toBe(true)
+    expect(matches(file, 'users')).toBe(false)
+    expect(matches(file, '')).toBe(true)
   })
 })

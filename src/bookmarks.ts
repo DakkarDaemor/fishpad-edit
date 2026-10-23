@@ -55,3 +55,11 @@ export function useBookmarks() {
     move: (id: string, delta: number) => setList((l) => moveItem(l, id, delta)),
   }
 }
+
+/** Il preferito corrisponde alla ricerca: nome, URL o nome del file, senza distinguere maiuscole. */
+export function matches(b: Bookmark, query: string) {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const text = b.kind === 'url' ? `${b.name} ${b.request.url}` : `${b.name} ${b.handle.name}`
+  return text.toLowerCase().includes(q)
+}

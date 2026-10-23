@@ -492,6 +492,9 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .sidebar-gutter { cursor: col-resize; }
 .side-section { display: flex; flex-direction: column; min-height: 0; }
 .bookmarks-section { flex: 0 1 auto; max-height: 40%; border-bottom: 1px solid var(--border); }
+.bookmarks-section.collapsed { flex: none; }
+.side-search { margin: 0 8px 4px; padding: 3px 6px; min-width: 0; flex-shrink: 0; font: inherit; font-size: 12px; color: var(--fg); background: var(--bg-editor); border: 1px solid var(--border); border-radius: 3px; outline: none; }
+.side-search:focus { border-color: var(--accent); }
 .tree-section { flex: 1; }
 .side-header { display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; min-height: 28px; flex-shrink: 0; }
 .side-header .panel-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

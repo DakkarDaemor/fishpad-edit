@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { matches } from '../bookmarks'
 import type { Bookmark } from '../store'
 import { ContextMenu } from './Menu'
 import { longPress } from './touch'
@@ -30,17 +31,37 @@ function detail(b: Bookmark) {
 export function BookmarkList({ list, canAdd, onAdd, onOpenUrl, onOpen, onEdit, onRemove, onMove }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number; bookmark: Bookmark } | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
+  const [collapsed, setCollapsed] = useState(false)
+  const [query, setQuery] = useState('')
+  const shown = list.filter((b) => matches(b, query))
 
   return (
-    <section className="side-section bookmarks-section">
+    <section className={`side-section bookmarks-section${collapsed ? ' collapsed' : ''}`}>
       <header className="side-header">
-        <span className="panel-title">Preferiti</span>
+        <button className="tree-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} title={collapsed ? 'Mostra i preferiti' : 'Nascondi i preferiti'}>
+          <span className="tree-twisty">{collapsed ? '▸' : '▾'}</span>
+          <span className="panel-title">Preferiti</span>
+        </button>
         <div className="spacer" />
         <button onClick={onOpenUrl} title="Apri un URL…" aria-label="Apri un URL">URL</button>
         <button onClick={onAdd} disabled={!canAdd} title="Aggiungi la tab attiva ai preferiti" aria-label="Aggiungi la tab attiva">☆</button>
       </header>
-      <div className="side-list">
-        {list.map((b) => {
+      {!collapsed && list.length > 0 && (
+        <input
+          className="side-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') setQuery('')
+            if (e.key === 'Enter' && shown.length === 1) onOpen(shown[0])
+          }}
+          placeholder="Cerca nei preferiti"
+          aria-label="Cerca nei preferiti"
+        />
+      )}
+      <div className="side-list" hidden={collapsed}>
+        {shown.map((b) => {
           const sub = detail(b)
           return (
             <button
@@ -60,6 +81,7 @@ export function BookmarkList({ list, canAdd, onAdd, onOpenUrl, onOpen, onEdit, o
             </button>
           )
         })}
+        {list.length > 0 && !shown.length && <p className="side-empty">Nessun preferito contiene «{query.trim()}».</p>}
         {!list.length && (
           <p className="side-empty">
             Nessun preferito. ☆ aggiunge la tab attiva (un file o un URL); URL apre un indirizzo, per esempio un'API che restituisce JSON.

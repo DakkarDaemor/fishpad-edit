@@ -37,13 +37,16 @@ import { detectEnv, deviceNotices, type Notice } from './notices'
 import {
   DEFAULT_SETTINGS,
   addRecent,
+  addRecentFolder,
+  clearRecentFolders,
   clearRecents,
-  loadFolder,
+  loadFolders,
+  loadRecentFolders,
   loadRecents,
   loadSeenNotices,
   loadSession,
   loadSettings,
-  saveFolder,
+  saveFolders,
   saveSeenNotices,
   saveSettings,
   type Bookmark,
@@ -101,6 +104,14 @@ interface DiffState {
 
 type UrlDialogState = { mode: 'open' } | { mode: 'edit'; bookmark: Extract<Bookmark, { kind: 'url' }> }
 
+/** chiave React stabile per ogni cartella aperta: chiudendone una, gli alberi delle altre restano come sono */
+const folderKeys = new WeakMap<FileSystemDirectoryHandle, number>()
+let nextFolderKey = 0
+const folderKey = (dir: FileSystemDirectoryHandle) => {
+  if (!folderKeys.has(dir)) folderKeys.set(dir, nextFolderKey++)
+  return folderKeys.get(dir)!
+}
+
 function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck'>, systemDark: boolean): EditorSettings {
   const palette = s.theme in PALETTES ? (s.theme as Palette) : null
   const dark = palette ? PALETTES[palette].dark : s.theme === 'dark' || (s.theme === 'system' && systemDark)
@@ -131,10 +142,11 @@ export default function App() {
   /** sale a ogni "Chiedi all'AI": la chat mette il cursore nel campo */
   const [chatFocus, setChatFocus] = useState(0)
   const [help, setHelp] = useState<HelpView | null>(null)
-  /** Cartella dell'esplora file; l'anteprima HTML carica da qui CSS, script e immagini referenziati dalla pagina */
-  const [folder, setFolderState] = useState<FileSystemDirectoryHandle | null>(null)
-  /** cambia a ogni nuova cartella: l'albero ricomincia da capo */
-  const [folderKey, setFolderKey] = useState(0)
+  /** Cartelle dell'esplora file; l'anteprima HTML carica da quella della pagina CSS, script e immagini referenziati */
+  const [folders, setFoldersState] = useState<FileSystemDirectoryHandle[]>([])
+  const [recentFolders, setRecentFolders] = useState<FileSystemDirectoryHandle[]>([])
+  /** spazio dell'app (telefono senza accesso al disco): una sola cartella, quella */
+  const workspaceDir = hasWorkspace ? (folders[0] ?? null) : null
   /** percorso nella cartella del file della tab attiva (calcolato in modo asincrono), per evidenziarlo nell'albero */
   const [resolved, setResolved] = useState<{ folder: FileSystemDirectoryHandle; handle: FileSystemFileHandle; path: string | null } | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(250)
@@ -292,7 +304,7 @@ export default function App() {
       if (!data) return
       const suggested = suggestedName(doc)
       // senza accesso al disco, i file si salvano nello spazio dell'app (l'esplora file ne mostra la radice)
-      const handle = hasWorkspace && folder ? await saveToWorkspace(folder, suggested, data) : await saveAs(suggested, data)
+      const handle = workspaceDir ? await saveToWorkspace(workspaceDir, suggested, data) : await saveAs(suggested, data)
       if (handle === null) return // annullato
       if (handle) {
         // una tab URL salvata su disco diventa quel file
@@ -327,10 +339,10 @@ export default function App() {
 
   /** Copia nello spazio dell'app dei file del dispositivo e li apre: da lì si salvano con Ctrl+S. */
   async function importToWorkspace() {
-    if (!folder) return
+    if (!workspaceDir) return
     const files = await pickUploads()
     if (!files.length) return
-    const handles = await importFiles(folder, files, (f, err) => flash(`Impossibile importare "${f.name}": ${err.message}`))
+    const handles = await importFiles(workspaceDir, files, (f, err) => flash(`Impossibile importare "${f.name}": ${err.message}`))
     setTreeVersion((v) => v + 1)
     try {
       await openFiles(await Promise.all(handles.map((h) => readHandle(h))))
@@ -528,21 +540,33 @@ export default function App() {
 
   // ---------- cartella (esplora file) ----------
 
-  function setFolder(dir: FileSystemDirectoryHandle | null) {
-    setFolderState(dir)
-    setFolderKey((k) => k + 1)
-    void saveFolder(dir)
+  function setFolders(list: FileSystemDirectoryHandle[]) {
+    setFoldersState(list)
+    void saveFolders(list)
   }
 
-  async function openFolder() {
+  /** Aggiunge una cartella all'esplora file (scelta ora, o una recente); se è già aperta non la ripete. */
+  async function openFolder(recent?: FileSystemDirectoryHandle) {
     try {
-      const dir = await pickFolder()
+      const dir = recent ?? (await pickFolder())
       if (!dir) return
-      setFolder(dir)
+      // da una recente: il permesso si chiede ora, col clic dell'utente (dopo non si potrebbe)
+      if (recent) await ensurePermission(dir, 'readwrite').catch(() => false)
+      setRecentFolders(await addRecentFolder(dir))
       setSettings((s) => ({ ...s, sidebar: true }))
+      for (const d of folders) if (await d.isSameEntry(dir).catch(() => false)) return
+      setFolders([...folders, dir])
     } catch (err) {
       flash(`Errore: ${(err as Error).message}`)
     }
+  }
+
+  const closeFolder = (dir: FileSystemDirectoryHandle) => setFolders(folders.filter((d) => d !== dir))
+
+  /** Cartella aperta che contiene il file, se c'è. */
+  async function folderOf(handle: FileSystemFileHandle) {
+    for (const d of folders) if (await d.resolve(handle).catch(() => null)) return d
+    return null
   }
 
   /**
@@ -836,7 +860,9 @@ export default function App() {
     const doc = wb.doc(docId)
     if (!doc) return
     let assets = null
-    if (folder && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
+    if (folders.length && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
+      // la cartella che contiene la pagina; per una tab non salvata, la prima aperta
+      const folder = (doc.handle && (await folderOf(doc.handle))) || folders[0]
       const granted = ask
         ? await ensurePermission(folder, 'read').catch(() => false)
         : (await permissionState(folder, 'read')) === 'granted'
@@ -899,23 +925,25 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const [session, savedSettings, savedRecents, savedFolder, seenNotices] = await Promise.all([
+      const [session, savedSettings, savedRecents, savedFolders, savedRecentFolders, seenNotices] = await Promise.all([
         loadSession(),
         loadSettings(),
         loadRecents(),
-        loadFolder(),
+        loadFolders(),
+        loadRecentFolders(),
         loadSeenNotices(),
       ])
       if (cancelled) return
       // senza accesso alle cartelle del disco l'esplora file mostra sempre lo spazio dell'app
-      const dir = hasWorkspace ? await workspaceRoot() : savedFolder
+      const appDir = hasWorkspace ? await workspaceRoot() : null
       if (cancelled) return
       settingsLoaded.current = true
       setSettings(savedSettings)
       setRecents(savedRecents)
-      setFolderState(dir)
+      setFoldersState(hasWorkspace ? (appDir ? [appDir] : []) : savedFolders)
+      setRecentFolders(savedRecentFolders)
       // alla prima apertura (o quando ne compare uno nuovo) si mostrano i limiti del dispositivo non ancora visti
-      const found = deviceNotices(detectEnv(hasFsAccess, hasWorkspace && !!dir))
+      const found = deviceNotices(detectEnv(hasFsAccess, !!appDir))
       setAllNotices(found)
       const unseen = found.filter((n) => !seenNotices.includes(n.id))
       if (unseen.length) setNotices(unseen)
@@ -1029,7 +1057,7 @@ export default function App() {
     const off = wb.onContentChange((docId) => {
       const shown = runner.getSnapshot().preview?.docId
       // anche le modifiche ai file su disco (CSS, script…) che la pagina può caricare dalla cartella aperta
-      if (!shown || (shown !== docId && !(folder && wb.doc(docId)?.handle))) return
+      if (!shown || (shown !== docId && !(folders.length && wb.doc(docId)?.handle))) return
       clearTimeout(timer)
       timer = window.setTimeout(() => {
         const id = runner.getSnapshot().preview?.docId
@@ -1040,7 +1068,7 @@ export default function App() {
       off()
       clearTimeout(timer)
     }
-  }, [wb, runner, folder])
+  }, [wb, runner, folders.length])
 
   // Cronologia locale: il testo alla chiusura di una tab, e ogni 5 minuti quello delle tab cambiate
   useEffect(() => {
@@ -1117,17 +1145,21 @@ export default function App() {
   // File della tab attiva nell'albero dell'esplora file
   const activeHandle = active?.handle
   useEffect(() => {
-    if (!folder || !activeHandle) return
+    if (!activeHandle) return
     let cancelled = false
-    folder
-      .resolve(activeHandle)
-      .catch(() => null)
-      .then((path) => !cancelled && setResolved({ folder, handle: activeHandle, path: path ? path.join('/') : null }))
+    ;(async () => {
+      for (const folder of folders) {
+        const path = await folder.resolve(activeHandle).catch(() => null)
+        if (cancelled) return
+        if (path) return setResolved({ folder, handle: activeHandle, path: path.join('/') })
+      }
+      setResolved(null)
+    })()
     return () => {
       cancelled = true
     }
-  }, [folder, activeHandle])
-  const activePath = resolved && resolved.folder === folder && resolved.handle === activeHandle ? resolved.path : null
+  }, [folders, activeHandle])
+  const activePath = (dir: FileSystemDirectoryHandle) => (resolved && resolved.folder === dir && resolved.handle === activeHandle ? resolved.path : null)
 
   // ---------- menu ----------
 
@@ -1155,8 +1187,30 @@ export default function App() {
         { label: 'Nuovo', shortcut: 'Alt+N', action: () => wb.newUntitled() },
         { label: 'Apri…', shortcut: 'Ctrl+O', action: () => void openDialog() },
         { label: 'Apri URL…', action: () => setUrlDialog({ mode: 'open' }) },
-        ...(hasFolderAccess ? [{ label: 'Apri cartella…', action: () => void openFolder() }] : []),
-        ...(hasWorkspace && folder ? [{ label: `Importa in «${WORKSPACE_LABEL}»…`, action: () => void importToWorkspace() }] : []),
+        ...(hasFolderAccess
+          ? [
+              { label: 'Apri cartella…', action: () => void openFolder() },
+              {
+                label: 'Cartelle recenti',
+                submenu: [
+                  ...recentFolders.map((d) => ({ label: d.name, action: () => void openFolder(d) })),
+                  ...(recentFolders.length
+                    ? [
+                        'separator' as const,
+                        {
+                          label: 'Svuota lista',
+                          danger: true,
+                          action: async () => {
+                            if (confirm('Svuotare la lista delle cartelle recenti?')) setRecentFolders(await clearRecentFolders())
+                          },
+                        },
+                      ]
+                    : []),
+                ],
+              },
+            ]
+          : []),
+        ...(workspaceDir ? [{ label: `Importa in «${WORKSPACE_LABEL}»…`, action: () => void importToWorkspace() }] : []),
         {
           label: 'Apri recente',
           submenu: hasFsAccess
@@ -1191,7 +1245,9 @@ export default function App() {
         { label: 'Chiudi tab', shortcut: 'Alt+W', action: closeActiveTab },
         { label: 'Riapri tab chiusa', shortcut: 'Alt+Shift+T', disabled: !snap.closedCount, action: () => void wb.reopenClosed() },
         { label: 'Chiudi pannello', disabled: !multiPane, action: () => wb.closePane() },
-        ...(hasFolderAccess ? [{ label: 'Chiudi cartella', disabled: !folder, action: () => setFolder(null) }] : []),
+        ...(hasFolderAccess
+          ? [{ label: folders.length > 1 ? 'Chiudi cartelle' : 'Chiudi cartella', disabled: !folders.length, action: () => setFolders([]) }]
+          : []),
       ],
     },
     {
@@ -1447,21 +1503,23 @@ export default function App() {
               onRemove={bookmarks.remove}
               onMove={bookmarks.move}
             />
-            {folder ? (
-              <FileTree
-                key={folderKey}
-                root={folder}
-                workspace={hasWorkspace ? { label: WORKSPACE_LABEL } : undefined}
-                version={treeVersion}
-                activePath={activePath}
-                onOpen={(h) => void openHandle(h)}
-                onBookmark={(handle) => void addBookmark({ id: crypto.randomUUID(), name: handle.name, kind: 'file', handle })}
-                onRename={renameInFolder}
-                onCloseFolder={hasWorkspace ? undefined : () => setFolder(null)}
-                onMessage={flash}
-              />
+            {folders.length ? (
+              folders.map((dir) => (
+                <FileTree
+                  key={folderKey(dir)}
+                  root={dir}
+                  workspace={hasWorkspace ? { label: WORKSPACE_LABEL } : undefined}
+                  version={treeVersion}
+                  activePath={activePath(dir)}
+                  onOpen={(h) => void openHandle(h)}
+                  onBookmark={(handle) => void addBookmark({ id: crypto.randomUUID(), name: handle.name, kind: 'file', handle })}
+                  onRename={renameInFolder}
+                  onCloseFolder={hasWorkspace ? undefined : () => closeFolder(dir)}
+                  onMessage={flash}
+                />
+              ))
             ) : (
-              <NoFolder supported={hasFolderAccess} onOpenFolder={() => void openFolder()} />
+              <NoFolder supported={hasFolderAccess} onOpenFolder={() => void openFolder()} recent={recentFolders} onOpenRecent={(d) => void openFolder(d)} />
             )}
           </Sidebar>
         )}

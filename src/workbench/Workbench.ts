@@ -18,7 +18,7 @@ import { diffRange } from './textDiff'
 import type { Encoding } from '../encoding'
 import type { UrlRequest, UrlResponse } from '../remote'
 import { saveSession, type Eol, type Session } from '../store'
-import { isValidLayout, leaf, paneIds, removePane, paneLocation, rotatePair, setSizes, splitPane, type Layout, type SplitDir } from './layout'
+import { dockPane, isValidLayout, leaf, paneIds, removePane, paneLocation, rotatePair, setSizes, splitPane, swapPanes, type DockSide, type Layout, type SplitDir } from './layout'
 
 export interface Doc {
   id: string
@@ -561,6 +561,15 @@ export class Workbench {
   /** Ruota la coppia di figli `index - 1` e `index` della divisione al percorso indicato. */
   rotateAt(path: number[], index: number) {
     this.layout = rotatePair(this.layout, path, index)
+    this.emit()
+    this.schedulePersist()
+  }
+
+  /** Pannello trascinato su un altro: al centro si scambiano di posto, su un lato `moved` si sposta lì. */
+  movePane(moved: string, target: string, side: DockSide | 'center') {
+    if (moved === target || !this.panes.has(moved) || !this.panes.has(target)) return
+    this.layout = side === 'center' ? swapPanes(this.layout, moved, target) : dockPane(this.layout, moved, target, side)
+    this.focusPane(moved)
     this.emit()
     this.schedulePersist()
   }

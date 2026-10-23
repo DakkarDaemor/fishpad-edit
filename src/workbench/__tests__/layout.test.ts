@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isValidLayout, leaf, moveDivider, paneIds, paneLocation, removePane, rotatePair, splitPane, type Layout } from '../layout'
+import { dockPane, isValidLayout, leaf, moveDivider, paneIds, paneLocation, removePane, rotatePair, splitPane, swapPanes, type Layout } from '../layout'
 
 describe('splitPane', () => {
   it('trasforma una foglia in una divisione a metà', () => {
@@ -21,6 +21,32 @@ describe('splitPane', () => {
     const l = splitPane(splitPane(leaf('a'), 'a', 'b', 'row'), 'b', 'c', 'column')
     expect(l.kind === 'split' && l.children[1]).toMatchObject({ kind: 'split', dir: 'column' })
     expect(paneIds(l)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('swapPanes e dockPane', () => {
+  // row[a, column[b, c]]
+  const base = splitPane(splitPane(leaf('a'), 'a', 'b', 'row'), 'b', 'c', 'column')
+
+  it('scambia due pannelli in rami diversi lasciando forma e dimensioni', () => {
+    const l = swapPanes(base, 'a', 'c')
+    expect(paneIds(l)).toEqual(['c', 'b', 'a'])
+    expect(l.kind === 'split' && l.sizes).toEqual([0.5, 0.5])
+  })
+
+  it('sposta un pannello a sinistra di un altro', () => {
+    expect(paneIds(dockPane(base, 'c', 'a', 'left'))).toEqual(['c', 'a', 'b'])
+  })
+
+  it('sposta un pannello sopra un altro, compattando da dove viene', () => {
+    const l = dockPane(base, 'a', 'c', 'top')
+    expect(l).toMatchObject({ kind: 'split', dir: 'column' })
+    expect(paneIds(l)).toEqual(['b', 'a', 'c'])
+    expect(isValidLayout(l, new Set(['a', 'b', 'c']))).toBe(true)
+  })
+
+  it('su se stesso non cambia nulla', () => {
+    expect(dockPane(base, 'a', 'a', 'right')).toBe(base)
   })
 })
 

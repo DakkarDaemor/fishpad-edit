@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 14.0
+
+- **Pannelli spostabili**: ogni pannello ha una maniglia ⠿ nella barra delle tab. Trascinandola su un altro pannello, al centro i due si scambiano di posto, su un bordo il pannello si sposta da quel lato.
+- **Più cartelle nell'esplora file**: File → Apri cartella aggiunge la cartella sotto quelle già aperte. Ognuna si chiude e riapre a fisarmonica dal suo titolo e si toglie con la sua ×. L'anteprima HTML carica i file locali dalla cartella che contiene la pagina.
+- **Cartelle recenti**: in File → Cartelle recenti, e nella barra laterale quando non c'è nessuna cartella aperta.
+
 ## 13.8
 
 - PHP: nella 13.7 i file PHP restavano senza colori, perché il controllo della sintassi non partiva nel browser e bloccava anche la colorazione. Ora funzionano entrambi, e se in futuro uno strumento di un linguaggio non si carica, i colori restano comunque.

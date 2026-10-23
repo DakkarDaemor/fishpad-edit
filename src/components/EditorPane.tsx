@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type DragEvent } from 'react'
 import { createPortal } from 'react-dom'
+import type { DockSide } from '../workbench/layout'
 import { tabColorVar } from '../workbench/tabColors'
 import type { Doc, Pane, Workbench } from '../workbench/Workbench'
 import { ContextMenu, type MenuItem } from './Menu'
@@ -30,6 +31,21 @@ interface DraggedTab {
 }
 
 const isTabDrag = (e: DragEvent) => e.dataTransfer.types.includes(TAB_MIME)
+
+const PANE_MIME = 'application/x-fishpad-pane'
+type PaneDrop = DockSide | 'center'
+/** pannello che si sta trascinando: durante dragover i dati del trascinamento non si possono leggere */
+let draggedPane: string | null = null
+
+/** Zona del pannello sotto il puntatore: vicino a un bordo (un quarto) quel lato, altrimenti il centro. */
+function dropZone(e: DragEvent): PaneDrop {
+  const r = e.currentTarget.getBoundingClientRect()
+  const x = (e.clientX - r.left) / r.width
+  const y = (e.clientY - r.top) / r.height
+  const sides: [PaneDrop, number][] = [['left', x], ['right', 1 - x], ['top', y], ['bottom', 1 - y]]
+  const [side, dist] = sides.reduce((a, b) => (b[1] < a[1] ? b : a))
+  return dist < 0.25 ? side : 'center'
+}
 const copyDrag = (e: DragEvent) => e.ctrlKey || e.metaKey
 
 /** Un pannello: barra delle tab + EditorView di CodeMirror (gestita dal Workbench). */
@@ -43,6 +59,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
   const hostRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
+  const [paneDrop, setPaneDrop] = useState<PaneDrop | null>(null)
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; docId: string } | null>(null)
   const closeTabMenu = useCallback(() => setTabMenu(null), [])
   const menuDoc = tabMenu ? docs.get(tabMenu.docId) : undefined
@@ -57,6 +74,13 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
   }, [pane.activeDocId])
 
   const onDrop = (e: DragEvent) => {
+    if (draggedPane) {
+      e.preventDefault()
+      e.stopPropagation()
+      setPaneDrop(null)
+      wb.movePane(draggedPane, pane.id, dropZone(e))
+      return
+    }
     if (!isTabDrag(e)) return
     // rilasciata su una tab: va prima di quella; altrove (barra o editor): in fondo
     const beforeDocId = (e.target as Element).closest<HTMLElement>('.tab')?.dataset.docId ?? null
@@ -69,6 +93,14 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
     else void wb.moveTab(docId, fromPaneId, pane.id, beforeDocId)
   }
   const onDragOver = (e: DragEvent) => {
+    if (draggedPane) {
+      if (draggedPane === pane.id) return
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      setPaneDrop(dropZone(e))
+      return
+    }
     if (!isTabDrag(e)) return
     e.preventDefault()
     e.stopPropagation() // altrimenti CodeMirror mostra il cursore di inserimento testo
@@ -138,6 +170,27 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
           )
         ) : (
           <>
+            {multiPane && !touch && (
+              <span
+                className="pane-grip"
+                draggable
+                role="button"
+                aria-label="Sposta pannello"
+                title="Trascina su un altro pannello: al centro si scambiano, su un bordo il pannello si sposta lì"
+                onDragStart={(e) => {
+                  draggedPane = pane.id
+                  e.dataTransfer.setData(PANE_MIME, pane.id)
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                onDragEnd={() => (draggedPane = null)}
+              >
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor">
+                  <circle cx="6" cy="4" r="1.2" /><circle cx="10" cy="4" r="1.2" />
+                  <circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" />
+                  <circle cx="6" cy="12" r="1.2" /><circle cx="10" cy="12" r="1.2" />
+                </svg>
+              </span>
+            )}
             <button
               onClick={() => void wb.split('row', pane.id)}
               title="Dividi a destra (Ctrl+\): apre lo stesso file in un nuovo pannello accanto, con scroll e cursore propri"
@@ -188,11 +241,16 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
       className={`pane${active ? ' active' : ''}${dropTarget ? ' drop-target' : ''}`}
       onMouseDownCapture={() => wb.focusPane(pane.id)}
       onDragOverCapture={onDragOver}
-      onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDropTarget(false)}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return
+        setDropTarget(false)
+        setPaneDrop(null)
+      }}
       onDropCapture={onDrop}
     >
       {tabHost ? createPortal(tabs, tabHost) : tabs}
       <div className="editor" ref={hostRef} />
+      {paneDrop && <div className={`pane-drop pane-drop-${paneDrop}`} aria-hidden="true" />}
       {tabMenu && menuDoc && (
         <ContextMenu
           x={tabMenu.x}

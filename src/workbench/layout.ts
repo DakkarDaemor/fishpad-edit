@@ -15,22 +15,39 @@ export function paneIds(node: Layout): string[] {
 
 const isLeaf = (node: Layout, paneId: string) => node.kind === 'pane' && node.paneId === paneId
 
-/** Divide `target` affiancandogli (row) o mettendogli sotto (column) il nuovo pannello. */
-export function splitPane(node: Layout, target: string, newPaneId: string, dir: SplitDir): Layout {
+/** Divide `target` affiancandogli (row) o mettendogli sotto (column) il nuovo pannello; con `before`, a sinistra o sopra. */
+export function splitPane(node: Layout, target: string, newPaneId: string, dir: SplitDir, before = false): Layout {
   if (node.kind === 'pane') {
     if (node.paneId !== target) return node
-    return { kind: 'split', dir, children: [node, leaf(newPaneId)], sizes: [0.5, 0.5] }
+    return { kind: 'split', dir, children: before ? [leaf(newPaneId), node] : [node, leaf(newPaneId)], sizes: [0.5, 0.5] }
   }
   const idx = node.children.findIndex((c) => isLeaf(c, target))
   if (idx >= 0 && node.dir === dir) {
     // stessa direzione: il nuovo pannello diventa un fratello e si prende metà dello spazio del target
     const children = [...node.children]
-    children.splice(idx + 1, 0, leaf(newPaneId))
+    children.splice(before ? idx : idx + 1, 0, leaf(newPaneId))
     const sizes = [...node.sizes]
     sizes.splice(idx, 1, sizes[idx] / 2, sizes[idx] / 2)
     return { ...node, children, sizes }
   }
-  return { ...node, children: node.children.map((c) => splitPane(c, target, newPaneId, dir)) }
+  return { ...node, children: node.children.map((c) => splitPane(c, target, newPaneId, dir, before)) }
+}
+
+/** Scambia di posto due pannelli, lasciando le dimensioni dove sono. */
+export function swapPanes(node: Layout, a: string, b: string): Layout {
+  if (node.kind === 'pane') return node.paneId === a ? leaf(b) : node.paneId === b ? leaf(a) : node
+  return { ...node, children: node.children.map((c) => swapPanes(c, a, b)) }
+}
+
+/** Lato di un pannello su cui se ne rilascia un altro. */
+export type DockSide = 'left' | 'right' | 'top' | 'bottom'
+
+/** Toglie `moved` da dov'è e lo mette sul lato indicato di `target`. */
+export function dockPane(node: Layout, moved: string, target: string, side: DockSide): Layout {
+  if (moved === target) return node
+  const rest = removePane(node, moved)
+  if (!rest) return node
+  return splitPane(rest, target, moved, side === 'left' || side === 'right' ? 'row' : 'column', side === 'left' || side === 'top')
 }
 
 /** Rimuove un pannello, compattando le divisioni rimaste con un solo figlio. `null` se non resta nulla. */

@@ -127,6 +127,8 @@ const KEY_SETTINGS = 'settings'
 const KEY_RECENTS = 'recents'
 // chiave storica: prima della 6.0 era la cartella dell'anteprima, ora è quella dell'esplora file
 const KEY_FOLDER = 'previewFolder'
+const KEY_FOLDERS = 'folders'
+const KEY_RECENT_FOLDERS = 'recentFolders'
 const KEY_BOOKMARKS = 'bookmarks'
 const KEY_SEEN_NOTICES = 'seenNotices'
 const MAX_RECENTS = 12
@@ -180,10 +182,38 @@ export async function addRecent(handle: FileSystemFileHandle): Promise<RecentFil
   return next
 }
 
-/** Cartella aperta nell'esplora file; l'anteprima HTML carica da lì i file locali (CSS, script, immagini). */
-export const loadFolder = () => safe(async () => (await get<FileSystemDirectoryHandle>(KEY_FOLDER)) ?? null, null)
-export const saveFolder = (dir: FileSystemDirectoryHandle | null) =>
-  safe(() => (dir ? set(KEY_FOLDER, dir) : del(KEY_FOLDER)), undefined)
+/** Cartelle aperte nell'esplora file; l'anteprima HTML carica da lì i file locali (CSS, script, immagini). */
+export const loadFolders = () =>
+  safe(async () => {
+    const list = await get<FileSystemDirectoryHandle[]>(KEY_FOLDERS)
+    if (list) return list
+    // prima della 14.0 c'era una sola cartella
+    const old = await get<FileSystemDirectoryHandle>(KEY_FOLDER)
+    return old ? [old] : []
+  }, [] as FileSystemDirectoryHandle[])
+export const saveFolders = (list: FileSystemDirectoryHandle[]) =>
+  safe(async () => {
+    await set(KEY_FOLDERS, list)
+    await del(KEY_FOLDER)
+  }, undefined)
+
+export const loadRecentFolders = () => safe(async () => (await get<FileSystemDirectoryHandle[]>(KEY_RECENT_FOLDERS)) ?? [], [] as FileSystemDirectoryHandle[])
+
+/** Mette la cartella in cima alle recenti (senza doppioni). */
+export async function addRecentFolder(dir: FileSystemDirectoryHandle): Promise<FileSystemDirectoryHandle[]> {
+  const kept: FileSystemDirectoryHandle[] = []
+  for (const d of await loadRecentFolders()) {
+    if (!(await safe(() => d.isSameEntry(dir), false))) kept.push(d)
+  }
+  const next = [dir, ...kept].slice(0, MAX_RECENTS)
+  await safe(() => set(KEY_RECENT_FOLDERS, next), undefined)
+  return next
+}
+
+export async function clearRecentFolders(): Promise<FileSystemDirectoryHandle[]> {
+  await safe(() => del(KEY_RECENT_FOLDERS), undefined)
+  return []
+}
 
 export async function clearRecents(): Promise<RecentFile[]> {
   await safe(() => del(KEY_RECENTS), undefined)

@@ -35,6 +35,8 @@ export function FileTree({ root, workspace, version, activePath, onOpen, onBookm
   const [listings, setListings] = useState<ReadonlyMap<string, Listing>>(new Map())
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry | null } | null>(null)
+  /** con più cartelle aperte, ognuna si chiude a fisarmonica dal suo titolo */
+  const [collapsed, setCollapsed] = useState(false)
   const closeMenu = useCallback(() => setMenu(null), [])
   /** handle di ogni cartella già vista, per percorso ('' = la cartella aperta) */
   const dirs = useRef(new Map<string, FileSystemDirectoryHandle>([['', root]]))
@@ -238,11 +240,14 @@ export function FileTree({ root, workspace, version, activePath, onOpen, onBookm
 
   const title = workspace?.label ?? root.name
   return (
-    <section className="side-section tree-section">
+    <section className={`side-section tree-section${collapsed ? ' collapsed' : ''}`}>
       <header className="side-header" title={title}>
-        <span className="panel-title">{title}</span>
+        <button className="tree-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} title={collapsed ? 'Mostra i file' : 'Nascondi i file'}>
+          <span className="tree-twisty">{collapsed ? '▸' : '▾'}</span>
+          <span className="panel-title">{title}</span>
+        </button>
         <div className="spacer" />
-        {granted && (
+        {granted && !collapsed && (
           <>
             {workspace && (
               <button onClick={() => void importHere('')} title="Importa file dal dispositivo" aria-label="Importa file">⇩</button>
@@ -255,7 +260,7 @@ export function FileTree({ root, workspace, version, activePath, onOpen, onBookm
           <button onClick={onCloseFolder} title="Chiudi la cartella" aria-label="Chiudi la cartella">×</button>
         )}
       </header>
-      <div className="tree" role="tree" onContextMenu={(e) => granted && openMenu(e, null)} {...longPress((x, y) => granted && setMenu({ x, y, entry: null }))}>
+      <div className="tree" role="tree" hidden={collapsed} onContextMenu={(e) => granted && openMenu(e, null)} {...longPress((x, y) => granted && setMenu({ x, y, entry: null }))}>
         {granted === false ? (
           <div className="side-empty">
             <p>Dopo un riavvio il browser chiede di nuovo il permesso di accedere alla cartella.</p>
@@ -271,7 +276,12 @@ export function FileTree({ root, workspace, version, activePath, onOpen, onBookm
 }
 
 /** Sezione Esplora senza cartella aperta. */
-export function NoFolder({ supported, onOpenFolder }: { supported: boolean; onOpenFolder: () => void }) {
+export function NoFolder({ supported, onOpenFolder, recent, onOpenRecent }: {
+  supported: boolean
+  onOpenFolder: () => void
+  recent: FileSystemDirectoryHandle[]
+  onOpenRecent: (dir: FileSystemDirectoryHandle) => void
+}) {
   return (
     <section className="side-section tree-section">
       <header className="side-header">
@@ -282,6 +292,16 @@ export function NoFolder({ supported, onOpenFolder }: { supported: boolean; onOp
           <>
             <p>Nessuna cartella aperta. I suoi file si aprono con un clic, e l'anteprima HTML carica da lì CSS, script e immagini.</p>
             <button className="primary" onClick={onOpenFolder}>Apri cartella…</button>
+            {recent.length > 0 && (
+              <div className="recent-folders">
+                <span className="panel-title">Recenti</span>
+                {recent.map((dir, i) => (
+                  <button key={i} className="tree-row" onClick={() => onOpenRecent(dir)} title={`Apri «${dir.name}»`}>
+                    <span className="tree-name">{dir.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         ) : (
           <p>L'esplora file richiede Chrome o Edge.</p>

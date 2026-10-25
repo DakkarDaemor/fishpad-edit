@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 14.3
+
+- **Impostazioni…** (`Ctrl+,`) è passato dal menu Visualizza al menu File, in fondo.
+
 ## 14.2
 
 - Preferiti nella barra laterale: la sezione si chiude e riapre dal suo titolo, come le cartelle, e ha un campo di ricerca che filtra per nome, URL o nome del file. `Invio` apre il preferito se ne resta uno solo, `Esc` svuota la ricerca.

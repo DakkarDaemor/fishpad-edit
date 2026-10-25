@@ -1248,6 +1248,8 @@ export default function App() {
         ...(hasFolderAccess
           ? [{ label: folders.length > 1 ? 'Chiudi cartelle' : 'Chiudi cartella', disabled: !folders.length, action: () => setFolders([]) }]
           : []),
+        'separator',
+        { label: 'Impostazioni…', shortcut: 'Ctrl+,', action: () => setSettingsView('look') },
       ],
     },
     {
@@ -1339,8 +1341,6 @@ export default function App() {
         { label: 'Console', checked: consoleOpen, action: () => setConsoleOpen((o) => !o) },
         { label: 'Chat AI', shortcut: 'Ctrl+Alt+I', checked: chatOpen, action: toggleChat },
         { label: "Chiedi all'AI sulla selezione", shortcut: 'Ctrl+Shift+Alt+I', disabled: !active, action: askAi },
-        'separator',
-        { label: 'Impostazioni…', shortcut: 'Ctrl+,', action: () => setSettingsView('look') },
       ],
     },
     {

@@ -20,6 +20,7 @@ import {
   filesFromDrop,
   hasFolderAccess,
   hasFsAccess,
+  isSpreadsheet,
   permissionState,
   pickFiles,
   pickFolder,
@@ -205,7 +206,9 @@ export default function App() {
     if (blankId && wb.activePane.docIds.length > 1) wb.closeTab(wb.activePane.id, blankId, true)
   }
 
-  async function openFiles(files: OpenedFile[]) {
+  async function openFiles(opened: OpenedFile[]) {
+    const files = opened.filter((f) => !isSpreadsheet(f.name))
+    if (files.length < opened.length) flash('I fogli di calcolo (Excel, ODS) non si aprono come testo')
     if (!files.length) return
     await replacingBlank(async () => {
       for (const f of files) {

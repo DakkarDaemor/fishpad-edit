@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 15.1
+
+- I fogli di calcolo (`.xls`, `.xlsx`, `.xlsm`, `.xlsb`, `.ods`) non si aprono più come testo: prima diventavano una tab illeggibile e salvandola si rovinava il file su disco. Ora compare un avviso.
+
 ## 15.0
 
 - **Anteprima CSV**: per i file `.csv` e `.tsv` `Ctrl+Enter` apre il pannello Anteprima con il file come tabella. La prima riga fa da intestazione e resta in vista scorrendo; le righe sono numerate e i file lunghi si caricano 500 righe alla volta. Il separatore (virgola, punto e virgola o tab) viene riconosciuto dalla prima riga; i campi tra virgolette possono contenere separatori e a capo.

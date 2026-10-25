@@ -22,6 +22,9 @@ export function detectEol(text: string): Eol {
   return lf === crlf + 1 ? 'CRLF' : 'LF'
 }
 
+/** Fogli di calcolo: sono binari, aperti come testo un Ctrl+S rovinerebbe il file su disco. */
+export const isSpreadsheet = (name: string) => /\.(xlsx?|xlsm|xlsb|ods)$/i.test(name)
+
 /** Legge un File (upload, file condiviso…); con `handle` resta collegato al file su disco. */
 export async function readFile(file: File, handle?: FileSystemFileHandle, encoding?: Encoding): Promise<OpenedFile> {
   const { text, encoding: found } = decode(new Uint8Array(await file.arrayBuffer()), encoding)

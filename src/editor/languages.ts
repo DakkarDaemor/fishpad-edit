@@ -1,5 +1,13 @@
-import { LanguageDescription, StreamLanguage, type LanguageSupport } from '@codemirror/language'
-import { languages } from '@codemirror/language-data'
+import { LanguageDescription, LanguageSupport, StreamLanguage } from '@codemirror/language'
+import { languages as dataLanguages } from '@codemirror/language-data'
+
+// language-data non ha il CSV: testo semplice, serve per riconoscerlo e aprirne l'anteprima
+const csv = LanguageDescription.of({
+  name: 'CSV',
+  extensions: ['csv', 'tsv'],
+  load: async () => new LanguageSupport(StreamLanguage.define({ token: (s) => (s.skipToEnd(), null) })),
+})
+const languages = [...dataLanguages, csv]
 
 export const languageNames: string[] = languages
   .map((l) => l.name)

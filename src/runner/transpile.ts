@@ -12,6 +12,7 @@ const TARGETS: Record<string, RunTarget> = {
   HTML: 'preview',
   Markdown: 'preview',
   JSON: 'preview',
+  CSV: 'preview',
 }
 
 /** Dove va eseguito un documento di questo linguaggio, o null se non è eseguibile. */

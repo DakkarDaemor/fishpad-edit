@@ -1,4 +1,4 @@
-import { htmlDocument, jsonDocument, markdownDocument, reactDocument } from './preview'
+import { csvDocument, htmlDocument, jsonDocument, markdownDocument, reactDocument } from './preview'
 import { IFRAME_HTML, SANDBOX_TAG, buildWorkerSource, type LogLevel, type SandboxMessage } from './sandbox'
 import { CompileError, isModule, runTarget, toJavaScript, type RunTarget } from './transpile'
 import { npmUrls, previewModules, requiredModules } from './npm'
@@ -168,6 +168,7 @@ export class Runner {
     }
     if (req.lang === 'HTML') return { code: htmlDocument(await this.withAssets(req.code, req.assets)) }
     if (req.lang === 'JSON') return { code: htmlDocument(jsonDocument(req.code)) }
+    if (req.lang === 'CSV') return { code: htmlDocument(csvDocument(req.code)) }
     if (req.lang === 'Markdown') return { code: htmlDocument(await this.withAssets(await markdownDocument(req.code), req.assets)) }
     const js = await toJavaScript(req.code, req.lang)
     const npm = previewModules(js)

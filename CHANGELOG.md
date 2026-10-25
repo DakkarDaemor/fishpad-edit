@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 15.0
+
+- **Anteprima CSV**: per i file `.csv` e `.tsv` `Ctrl+Enter` apre il pannello Anteprima con il file come tabella. La prima riga fa da intestazione e resta in vista scorrendo; le righe sono numerate e i file lunghi si caricano 500 righe alla volta. Il separatore (virgola, punto e virgola o tab) viene riconosciuto dalla prima riga; i campi tra virgolette possono contenere separatori e a capo.
+
 ## 14.3
 
 - **Impostazioni…** (`Ctrl+,`) è passato dal menu Visualizza al menu File, in fondo.

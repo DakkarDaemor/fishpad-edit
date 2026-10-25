@@ -145,6 +145,90 @@ export function jsonDocument(text: string): string {
 <script>${JSON_TREE}</script></body></html>`
 }
 
+/** Separatore del CSV, dalla prima riga: tab, `;` (Excel in italiano) o `,`. */
+function csvSeparator(text: string): string {
+  const first = text.slice(0, text.search(/\r?\n|$/))
+  const count = (c: string) => first.split(c).length
+  return [',', ';', '\t'].reduce((best, c) => (count(c) > count(best) ? c : best))
+}
+
+/** Righe del CSV (RFC 4180): campi tra virgolette con `""`, separatori e a capo dentro. */
+export function parseCsv(text: string, sep = csvSeparator(text)): string[][] {
+  const rows: string[][] = []
+  let row: string[] = []
+  let cell = ''
+  let quoted = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (quoted) {
+      if (c !== '"') cell += c
+      else if (text[i + 1] === '"') cell += text[i++]
+      else quoted = false
+    } else if (c === '"' && cell === '') quoted = true
+    else if (c === sep) {
+      row.push(cell)
+      cell = ''
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++
+      row.push(cell)
+      rows.push(row)
+      row = []
+      cell = ''
+    } else cell += c
+  }
+  if (cell || row.length) rows.push([...row, cell])
+  return rows
+}
+
+const CSV_STYLE = `
+:root { color-scheme: light dark; --muted: #888; --line: #8884; --head: Canvas; }
+body { margin: 0; font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+table { border-collapse: collapse; }
+th, td { padding: 4px 10px; border: 1px solid var(--line); white-space: pre-wrap; vertical-align: top; }
+thead th { position: sticky; top: 0; background: var(--head); box-shadow: 0 1px 0 var(--line); }
+td.n { color: var(--muted); text-align: right; user-select: none; }
+.meta { padding: 8px 10px; color: var(--muted); }
+.more { margin: 8px 10px; font: inherit; }
+`
+
+// Gira nell'iframe: la prima riga fa da intestazione, le altre si aggiungono 500 alla volta.
+const CSV_TABLE = `
+const rows = JSON.parse(document.getElementById('data').textContent);
+const PAGE = 500;
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const cols = rows.reduce((m, r) => Math.max(m, r.length), 0);
+const line = (tag, r, n) => { const tr = el('tr'); tr.append(el(tag, 'n', n)); for (let c = 0; c < cols; c++) tr.append(el(tag, null, r[c] ?? '')); return tr; };
+const [head = [], ...body] = rows;
+document.body.append(el('div', 'meta', body.length + (body.length === 1 ? ' riga' : ' righe') + ', ' + cols + (cols === 1 ? ' colonna' : ' colonne')));
+const table = el('table'), thead = el('thead'), tbody = el('tbody');
+thead.append(line('th', head, ''));
+table.append(thead, tbody);
+document.body.append(table);
+let shown = 0;
+const more = () => {
+  const end = Math.min(body.length, shown + PAGE);
+  const frag = document.createDocumentFragment();
+  for (; shown < end; shown++) frag.append(line('td', body[shown], shown + 1));
+  tbody.append(frag);
+  document.querySelector('.more')?.remove();
+  if (shown < body.length) {
+    const b = el('button', 'more', 'Mostra altre ' + Math.min(PAGE, body.length - shown) + ' (di ' + (body.length - shown) + ')');
+    b.onclick = more;
+    document.body.append(b);
+  }
+};
+more();
+`
+
+/** Pagina con il CSV come tabella. */
+export function csvDocument(text: string): string {
+  // < nelle stringhe JSON è lo stesso carattere e non chiude lo <script>
+  const data = JSON.stringify(parseCsv(text)).replace(/</g, '\\u003c')
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${CSV_STYLE}</style></head><body>
+<script type="application/json" id="data">${data}</script>
+<script>${CSV_TABLE}</script></body></html>`
+}
+
 /**
  * Pagina per un componente React. `js` è il codice già traspilato (import → require).
  * Se il codice non chiama createRoot, viene montato in #root l'export default o, in mancanza,

@@ -188,7 +188,7 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
                   <Answer key={i} entry={e} onInsert={onInsert} onCompare={onCompare} />
                 ),
               )}
-              {busy && <div className="chat-msg busy">Sto scrivendo…</div>}
+              {busy && <div className="chat-msg busy">Sto scrivendo</div>}
             </div>
             {error && <div className="chat-error">{error}</div>}
             <div className="chat-input">

@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 15.2
+
+- Chat AI più leggibile: le domande sono bolle colorate con bordo, a destra; le risposte stanno in un riquadro a tutta larghezza, con i blocchi di codice staccati dal testo e modello e ora in fondo sotto una linea. Mentre il modello risponde i puntini si animano.
+
 ## 15.1
 
 - I fogli di calcolo (`.xls`, `.xlsx`, `.xlsm`, `.xlsb`, `.ods`) non si aprono più come testo: prima diventavano una tab illeggibile e salvandola si rovinava il file su disco. Ora compare un avviso.

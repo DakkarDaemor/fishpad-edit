@@ -4,9 +4,13 @@ import { EditorView } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 
 /** Temi oltre a chiaro e scuro. I colori dell'interfaccia sono in styles.css, sotto [data-palette]. */
-export type Palette = 'solarized-light' | 'solarized-dark' | 'dracula' | 'monokai-dimmed' | 'abyss' | 'tomorrow-night-blue'
+export type Palette = 'nebbia' | 'ardesia' | 'grafite' | 'solarized-light' | 'solarized-dark' | 'dracula' | 'monokai-dimmed' | 'abyss' | 'tomorrow-night-blue'
 
 export const PALETTES: Record<Palette, { label: string; dark: boolean }> = {
+  // luminosità media: grigi tra il chiaro e lo scuro
+  nebbia: { label: 'Nebbia (grigio chiaro)', dark: false },
+  ardesia: { label: 'Ardesia (grigio medio)', dark: true },
+  grafite: { label: 'Grafite (grigio scuro)', dark: true },
   'solarized-light': { label: 'Solarized chiaro', dark: false },
   'solarized-dark': { label: 'Solarized scuro', dark: true },
   dracula: { label: 'Dracula', dark: true },
@@ -46,6 +50,49 @@ const SOLARIZED: Colors = {
 }
 
 const COLORS: Record<Palette, Colors> = {
+  // colori della sintassi scelti per un contrasto di almeno 4.5:1 sul fondo dell'editor (commenti un po' meno)
+  nebbia: {
+    comment: '#4a515c',
+    keyword: '#74208a',
+    string: '#265d0e',
+    number: '#8a3c00',
+    fn: '#184a94',
+    type: '#6e5100',
+    tag: '#86295a',
+    attr: '#664400',
+    prop: '#184a94',
+    regexp: '#9a2019',
+    heading: '#843600',
+    invalid: '#9e1d27',
+  },
+  ardesia: {
+    comment: '#cbd0d6',
+    keyword: '#facdff',
+    string: '#cdf2a8',
+    number: '#ffd6aa',
+    fn: '#bfe2ff',
+    type: '#ffeaa8',
+    tag: '#ffcad0',
+    attr: '#ffd6aa',
+    prop: '#bfe2ff',
+    regexp: '#a8f2f2',
+    heading: '#ffd6aa',
+    invalid: '#ffc4c2',
+  },
+  grafite: {
+    comment: '#a3aab3',
+    keyword: '#f5b8ff',
+    string: '#c2ec98',
+    number: '#ffcc99',
+    fn: '#a9d6ff',
+    type: '#ffe599',
+    tag: '#ffb5bd',
+    attr: '#ffcc99',
+    prop: '#a9d6ff',
+    regexp: '#99ecec',
+    heading: '#ffcc99',
+    invalid: '#ffaaa7',
+  },
   'solarized-light': SOLARIZED,
   'solarized-dark': { ...SOLARIZED, comment: '#586e75' },
   dracula: {

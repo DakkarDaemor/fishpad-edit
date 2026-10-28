@@ -42,6 +42,7 @@ export async function webExtensions(lang: string | null): Promise<Extension> {
     )
   }
   if (COLOR_LANGS.has(lang)) exts.push((await import('./colors')).colorSwatches)
+  if (lang === 'Markdown') exts.push((await import('./markdownEdit')).markdownKeymap)
   if (lang === 'JSON') {
     const [{ jsonParseLinter }, { linter, lintGutter }] = await Promise.all([import('@codemirror/lang-json'), import('@codemirror/lint')])
     exts.push(linter(jsonParseLinter(), { delay: 300 }), lintGutter())

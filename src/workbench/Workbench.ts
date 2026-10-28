@@ -55,6 +55,8 @@ export interface Pane {
   id: string
   docIds: string[]
   activeDocId: string | null
+  /** tab mostrate come anteprima Markdown invece che come testo */
+  previews?: string[]
 }
 
 export interface CursorStatus {
@@ -184,6 +186,9 @@ export class Workbench {
   get activeView() {
     return this.views.get(this.activePaneId)
   }
+  viewOf(paneId: string) {
+    return this.views.get(paneId)
+  }
   get paneCount() {
     return this.panes.size
   }
@@ -194,6 +199,25 @@ export class Workbench {
   /** Pannelli in cui il documento è aperto. */
   private panesWith(docId: string) {
     return [...this.panes.values()].filter((p) => p.docIds.includes(docId))
+  }
+
+  isPreview(paneId: string, docId: string | null | undefined) {
+    return !!docId && !!this.panes.get(paneId)?.previews?.includes(docId)
+  }
+
+  /** Mostra la tab come anteprima (on) o come testo. */
+  setPreview(paneId: string, docId: string, on: boolean) {
+    const pane = this.panes.get(paneId)
+    if (!pane?.docIds.includes(docId) || this.isPreview(paneId, docId) === on) return
+    const rest = (pane.previews ?? []).filter((id) => id !== docId)
+    this.panes.set(paneId, { ...pane, previews: on ? [...rest, docId] : rest })
+    this.emit()
+    this.schedulePersist()
+  }
+
+  /** La tab passa da testo ad anteprima Markdown e viceversa. */
+  togglePreview(paneId = this.activePaneId, docId = this.panes.get(paneId)?.activeDocId) {
+    if (docId) this.setPreview(paneId, docId, !this.isPreview(paneId, docId))
   }
 
   /** Uno stato qualsiasi del documento: il testo è identico in tutti i pannelli. */
@@ -428,7 +452,7 @@ export class Workbench {
       clearTimeout(this.detectTimers.get(docId))
     }
     const wasActive = pane.activeDocId === docId
-    this.panes.set(paneId, { ...pane, docIds, activeDocId: wasActive ? null : pane.activeDocId })
+    this.panes.set(paneId, { ...pane, docIds, activeDocId: wasActive ? null : pane.activeDocId, previews: pane.previews?.filter((id) => id !== docId) })
 
     if (docIds.length === 0) {
       if (this.panes.size > 1) this.removePaneNow(paneId)
@@ -546,7 +570,8 @@ export class Workbench {
       const docIds = [...to.docIds]
       const at = beforeDocId ? docIds.indexOf(beforeDocId) : -1
       docIds.splice(at < 0 ? docIds.length : at, 0, docId)
-      this.panes.set(toPaneId, { ...to, docIds })
+      const previews = this.isPreview(fromPaneId, docId) ? [...(to.previews ?? []), docId] : to.previews
+      this.panes.set(toPaneId, { ...to, docIds, previews })
     }
     this.closeTab(fromPaneId, docId, true)
     this.activate(toPaneId, docId)
@@ -608,7 +633,8 @@ export class Workbench {
     const k = docId ? instanceKey(paneId, docId) : null
     const st = k ? this.states.get(k) : undefined
     if (!view || !st || !k) return
-    focus &&= this.autoFocus
+    // un'anteprima non riceve tasti: il testo nascosto non deve prendere il focus
+    focus &&= this.autoFocus && !this.isPreview(paneId, docId)
     if (view.state === st) {
       if (focus) view.focus()
       return
@@ -744,7 +770,8 @@ export class Workbench {
         }
       }
       const active = p.tabs.some((t) => t.docId === p.activeDocId) ? p.activeDocId! : p.tabs[0].docId
-      this.panes.set(p.id, { ...this.panes.get(p.id)!, activeDocId: active })
+      const previews = p.tabs.filter((t) => t.preview).map((t) => t.docId)
+      this.panes.set(p.id, { ...this.panes.get(p.id)!, activeDocId: active, ...(previews.length && { previews }) })
       this.showInView(p.id, false)
     }
     this.activePaneId = this.panes.has(session.activePaneId) ? session.activePaneId : panes[0].id
@@ -762,7 +789,7 @@ export class Workbench {
         activeDocId: p.activeDocId,
         tabs: p.docIds.flatMap((docId) => {
           const st = this.states.get(instanceKey(p.id, docId))
-          return st ? [{ docId, cursor: st.selection.main.head, folds: serializeFolds(st) }] : []
+          return st ? [{ docId, cursor: st.selection.main.head, folds: serializeFolds(st), ...(p.previews?.includes(docId) && { preview: true }) }] : []
         }),
       })),
       layout: this.layout,

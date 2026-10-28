@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 16.0
+
+- **Tre temi grigi**, meno estremi del bianco e del nero: **Nebbia** (grigio chiaro, testo scuro), **Ardesia** (grigio medio) e **Grafite** (grigio scuro, tra Ardesia e il nero), in Impostazioni → Aspetto. I colori della sintassi sono scelti per restare ben leggibili sul grigio.
+- **Formattazione Markdown**: nelle tab Markdown c'è una barra sopra il testo con grassetto, corsivo, barrato, codice, link, titoli, elenchi puntati e numerati, cose da fare e citazione. Le stesse cose si fanno da tastiera: `Ctrl+B`, `Ctrl+I`, `Ctrl+Shift+X`, `Ctrl+E` (codice in linea, o blocco su più righe), `Ctrl+Shift+L` (link), `Ctrl+Shift+1…3` (titoli), `Ctrl+Shift+7 / 8 / 9 / .` (elenco numerato, puntato, cose da fare, citazione). Ripetuto, ogni comando toglie la formattazione. Senza selezione, il grassetto e il corsivo prendono la parola sotto il cursore. Scrivendo Markdown `Ctrl+B` è il grassetto; la barra laterale si apre e chiude ancora da menu o fuori dal testo.
+- **Anteprima Markdown nella tab**: `Ctrl+Enter` (o "Anteprima" nella barra) mostra la tab come anteprima invece che nel pannello a destra; di nuovo `Ctrl+Enter`, o "✎ Modifica", torna al testo. Si aggiorna mentre scrivi senza ricaricarsi, quindi non lampeggia e resta dove l'avevi scorsa. Per averla accanto al testo si divide il pannello (`Ctrl+\`) e si mette in anteprima una delle due tab: così si tengono aperte più anteprime insieme, anche di file diversi. La tab in anteprima ha l'occhio davanti al nome, il nome in corsivo e il fondo tinto. Tornando alla tab l'anteprima è ancora dove l'avevi lasciata; i titoli hanno gli id come su GitHub, quindi gli indici con link `#sezione` funzionano; i link esterni si aprono come normali pagine del browser. Un link a un altro file Markdown (`[vedi](docs/altro.md)`) lo apre nell'editor, già in anteprima, o lo mostra se è già aperto; serve la cartella del file aperta nell'esplora file.
+
 ## 15.2
 
 - Chat AI più leggibile: le domande sono bolle colorate con bordo, a destra; le risposte stanno in un riquadro a tutta larghezza, con i blocchi di codice staccati dal testo e modello e ora in fondo sotto una linea. Mentre il modello risponde i puntini si animano.

@@ -6,6 +6,9 @@ import type { Doc, Pane, Workbench } from '../workbench/Workbench'
 import { ContextMenu, type MenuItem } from './Menu'
 import { tabColorItems } from './tabColorMenu'
 import { COARSE_QUERY, longPress, useMediaQuery } from './touch'
+import { MarkdownPreview } from './MarkdownPreview'
+import { MARKDOWN_ACTIONS, runMarkdownAction } from '../editor/markdownEdit'
+import type { PreviewAssets } from '../runner/folderAssets'
 
 const TAB_MIME = 'application/x-fishpad-tab'
 
@@ -23,6 +26,10 @@ interface Props {
   marks: { preview?: string; console?: string }
   /** se c'è, la barra delle tab sta lì (nella barra del titolo) invece che sopra l'editor */
   tabHost?: HTMLElement | null
+  /** file locali per le anteprime Markdown nelle tab */
+  mdAssets?: (docId: string) => Promise<PreviewAssets | null>
+  /** link a un altro file Markdown, relativo al documento */
+  mdOpenLink?: (docId: string, href: string) => void
 }
 
 interface DraggedTab {
@@ -55,7 +62,14 @@ function tabTitle(d: Doc) {
   return `${d.name} (non salvato su disco)`
 }
 
-export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks, tabHost }: Props) {
+const EYE = (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+    <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" />
+    <circle cx="8" cy="8" r="2" fill="currentColor" />
+  </svg>
+)
+
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks, tabHost, mdAssets, mdOpenLink }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
@@ -67,6 +81,16 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
   const touch = useMediaQuery(COARSE_QUERY)
 
   useEffect(() => wb.attachView(pane.id, hostRef.current!), [wb, pane.id])
+
+  const activeDoc = pane.activeDocId ? docs.get(pane.activeDocId) : undefined
+  const markdown = activeDoc?.lang === 'Markdown'
+  const previewing = markdown && !!pane.previews?.includes(activeDoc.id)
+  // tornando al testo il cursore riprende dov'era: solo ora l'editor è di nuovo visibile e può avere il focus
+  const wasPreviewing = useRef(previewing)
+  useEffect(() => {
+    if (wasPreviewing.current && !previewing && wb.getSnapshot().activePaneId === pane.id) wb.viewOf(pane.id)?.focus()
+    wasPreviewing.current = previewing
+  }, [wb, pane.id, previewing])
 
   // con molte tab la barra scorre: la tab mostrata resta in vista
   useEffect(() => {
@@ -113,11 +137,12 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
       {pane.docIds.map((id) => {
         const d = docs.get(id)
         if (!d) return null
+        const isPreview = d.lang === 'Markdown' && !!pane.previews?.includes(id)
         return (
           <div
             key={id}
             data-doc-id={id}
-            className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}`}
+            className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}${isPreview ? ' preview-tab' : ''}`}
             style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
             title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
             draggable={!touch}
@@ -133,13 +158,15 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
             }}
             {...longPress((x, y) => setTabMenu({ x, y, docId: id }))}
           >
+            {isPreview && (
+              <span className="tab-eye" title="Anteprima: Ctrl+Enter o il menu della tab per tornare al testo" aria-label="anteprima di">
+                {EYE}
+              </span>
+            )}
             <span className="tab-name">{d.name}</span>
-            {marks.preview === id && (
+            {!isPreview && marks.preview === id && (
               <span className="tab-mark" title="Mostrato nell'anteprima" aria-label="in anteprima">
-                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                  <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" fill="none" stroke="currentColor" />
-                  <circle cx="8" cy="8" r="2" fill="currentColor" />
-                </svg>
+                {EYE}
               </span>
             )}
             {marks.console === id && marks.preview !== id && (
@@ -249,7 +276,39 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
       onDropCapture={onDrop}
     >
       {tabHost ? createPortal(tabs, tabHost) : tabs}
-      <div className="editor" ref={hostRef} />
+      {markdown && !previewing && (
+        <div className="md-bar" role="toolbar" aria-label="Formattazione Markdown">
+          {MARKDOWN_ACTIONS.map((a) => (
+            <button
+              key={a.id}
+              className={`md-${a.id}`}
+              title={a.shortcut ? `${a.label} (${a.shortcut})` : a.label}
+              aria-label={a.label}
+              // il clic non toglie il focus all'editor: la selezione resta
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                const view = wb.viewOf(pane.id)
+                if (view) runMarkdownAction(view, a)
+              }}
+            >
+              {a.icon}
+            </button>
+          ))}
+          <div className="spacer" />
+          <button onMouseDown={(e) => e.preventDefault()} onClick={() => wb.togglePreview(pane.id, activeDoc!.id)} title="Mostra l'anteprima in questa tab (Ctrl+Enter); per averla accanto al testo, dividi il pannello">
+            {EYE} Anteprima
+          </button>
+        </div>
+      )}
+      {previewing && (
+        <div className="md-bar">
+          <span className="md-bar-label">{EYE} Anteprima</span>
+          <div className="spacer" />
+          <button onClick={() => wb.setPreview(pane.id, activeDoc!.id, false)} title="Mostra il testo in questa tab (Ctrl+Enter)">✎ Modifica</button>
+        </div>
+      )}
+      <div className="editor" ref={hostRef} hidden={previewing} />
+      {previewing && <MarkdownPreview wb={wb} paneId={pane.id} docId={activeDoc!.id} assets={mdAssets} onOpenLink={mdOpenLink} />}
       {paneDrop && <div className={`pane-drop pane-drop-${paneDrop}`} aria-hidden="true" />}
       {tabMenu && menuDoc && (
         <ContextMenu
@@ -264,6 +323,14 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
                   { label: 'Apri in basso', action: () => void wb.split('column', pane.id, menuDoc.id) },
                   'separator' as const,
                 ]),
+            ...(menuDoc.lang === 'Markdown'
+              ? [
+                  pane.previews?.includes(menuDoc.id)
+                    ? { label: 'Mostra il testo', action: () => wb.setPreview(pane.id, menuDoc.id, false) }
+                    : { label: 'Mostra come anteprima', action: () => wb.setPreview(pane.id, menuDoc.id, true) },
+                  'separator' as const,
+                ]
+              : []),
             ...tabMenuExtra(menuDoc),
             { heading: 'Colore' },
             ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),

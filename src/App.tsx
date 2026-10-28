@@ -32,6 +32,7 @@ import {
   writeHandle,
   type OpenedFile,
 } from './fs'
+import { resolvePath } from './runner/assets'
 import { WORKSPACE_LABEL, hasWorkspace, importFiles, parseWorkspacePath, workspaceRoot, writeInWorkspace } from './workspace'
 import { sharedUrl, takeShared, type Shared } from './share'
 import { detectEnv, deviceNotices, type Notice } from './notices'
@@ -243,6 +244,30 @@ export default function App() {
     } catch {
       flash(`Impossibile aprire "${handle.name}" (spostato o eliminato?)`)
     }
+  }
+
+  /**
+   * Link a un altro file Markdown dall'anteprima: lo apre accanto, nel pannello dell'anteprima e anche lui in anteprima,
+   * o lo mostra se è già aperto. Serve la cartella del documento aperta nell'esplora file.
+   */
+  async function openLinked(docId: string, href: string) {
+    const doc = wb.doc(docId)
+    const folder = doc?.handle && (await folderOf(doc.handle))
+    const page = folder && (await folder.resolve(doc.handle!))
+    if (!page) {
+      flash("Per seguire i link ad altri file, apri nell'esplora file la cartella che contiene questo documento")
+      return
+    }
+    const path = resolvePath(page.slice(0, -1), href)
+    const handle = path && (await fileInFolder(folder, path))
+    if (!handle) {
+      flash(`File non trovato: ${href}`)
+      return
+    }
+    const wasOpen = await wb.findByHandle(handle)
+    await openHandle(handle)
+    const opened = !wasOpen && (await wb.findByHandle(handle))
+    if (opened && opened.lang === 'Markdown') wb.setPreview(wb.activePane.id, opened.id, true)
   }
 
   /** Testo del documento nella sua codifica; null se l'utente annulla perché la codifica non basta. */
@@ -843,6 +868,11 @@ export default function App() {
     const v = wb.activeView
     const target = runTarget(doc?.lang)
     if (!doc || !v || !target) return false
+    // Markdown: la tab passa ad anteprima e viceversa (per averle affiancate si divide il pannello)
+    if (doc.lang === 'Markdown') {
+      wb.togglePreview(wb.activePane.id, doc.id)
+      return true
+    }
     if (target === 'preview') {
       void runPreview(doc.id)
       return true
@@ -862,20 +892,7 @@ export default function App() {
   async function runPreview(docId: string, ask = true) {
     const doc = wb.doc(docId)
     if (!doc) return
-    let assets = null
-    if (folders.length && (doc.lang === 'HTML' || doc.lang === 'Markdown')) {
-      // la cartella che contiene la pagina; per una tab non salvata, la prima aperta
-      const folder = (doc.handle && (await folderOf(doc.handle))) || folders[0]
-      const granted = ask
-        ? await ensurePermission(folder, 'read').catch(() => false)
-        : (await permissionState(folder, 'read')) === 'granted'
-      if (granted) {
-        assets = await folderAssets(folder, doc.handle, async (h) => {
-          const open = await wb.findByHandle(h)
-          return open ? wb.content(open.id) : undefined
-        })
-      }
-    }
+    const assets = doc.lang === 'HTML' || doc.lang === 'Markdown' ? await previewAssets(docId, ask) : null
     // il documento potrebbe essere stato chiuso durante gli await
     const current = wb.doc(docId)
     if (!current) return
@@ -885,6 +902,22 @@ export default function App() {
       setRightTab('preview')
     }
     void runner.run({ code: wb.content(docId), lang: current.lang, docId, name: current.name, firstLine: 1, selection: false, assets })
+  }
+
+  /** File della cartella aperta per immagini, stili e script della pagina; `ask`: si può chiedere il permesso di lettura. */
+  async function previewAssets(docId: string, ask: boolean) {
+    const doc = wb.doc(docId)
+    if (!doc || !folders.length) return null
+    // la cartella che contiene la pagina; per una tab non salvata, la prima aperta
+    const folder = (doc.handle && (await folderOf(doc.handle))) || folders[0]
+    const granted = ask
+      ? await ensurePermission(folder, 'read').catch(() => false)
+      : (await permissionState(folder, 'read')) === 'granted'
+    if (!granted) return null
+    return folderAssets(folder, doc.handle, async (h) => {
+      const open = await wb.findByHandle(h)
+      return open ? wb.content(open.id) : undefined
+    })
   }
 
   /** Dal nome del file in Anteprima o Console alla sua tab (sul telefono l'anteprima copre l'editor). */
@@ -915,7 +948,7 @@ export default function App() {
   const zoom = (delta: number) => setSettings((s) => ({ ...s, fontSize: Math.min(32, Math.max(10, s.fontSize + delta)) }))
 
   // Le azioni sono ricreate a ogni render: gli handler globali le leggono da qui.
-  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, refreshUrl, toggleChat, askAi, gotoDocLine }
+  const all = { openDialog, save, openFiles, openShared, closeActiveTab, toggleWrap, toggleSidebar, runActive, checkDisk, formatActive, runPreview, previewAssets, openLinked, refreshUrl, toggleChat, askAi, gotoDocLine }
   const actions = useRef(all)
   useEffect(() => {
     actions.current = all
@@ -988,7 +1021,8 @@ export default function App() {
       else if ((mod && e.shiftKey && !e.altKey && code === 'KeyP') || e.key === 'F1') setPalette('commands')
       else if (mod && !e.shiftKey && !e.altKey && code === 'KeyP') setPalette('tabs')
       else if (e.altKey && e.shiftKey && !mod && code === 'KeyF') void a.formatActive()
-      else if (mod && !e.shiftKey && !e.altKey && code === 'KeyB') a.toggleSidebar()
+      // scrivendo Markdown Ctrl+B è il grassetto
+      else if (mod && !e.shiftKey && !e.altKey && code === 'KeyB' && !(wb.activeDoc?.lang === 'Markdown' && (e.target as Element).closest?.('.cm-editor'))) a.toggleSidebar()
       else if (mod && !e.shiftKey && !e.altKey && code === 'Comma') setSettingsView('look')
       else if (mod && e.altKey && !e.shiftKey && code === 'KeyI') a.toggleChat()
       else if (mod && e.altKey && e.shiftKey && code === 'KeyI') a.askAi()
@@ -1424,6 +1458,10 @@ export default function App() {
     wb.focusPane(ids[(ids.indexOf(snap.activePaneId) + 1) % ids.length])
   }
 
+  // stessa funzione a ogni render: l'anteprima Markdown non deve ricominciare
+  const mdAssets = useCallback((docId: string) => actions.current.previewAssets(docId, false), [])
+  const mdOpenLink = useCallback((docId: string, href: string) => void actions.current.openLinked(docId, href), [])
+
   function renderPane(paneId: string) {
     const pane = snap.panes.get(paneId)
     return pane ? (
@@ -1438,6 +1476,8 @@ export default function App() {
         compact={compact ? { onNextPane: multiPane ? nextPane : undefined } : undefined}
         marks={{ preview: runState.preview?.docId, console: runState.source?.docId }}
         tabHost={titleTabs}
+        mdAssets={mdAssets}
+        mdOpenLink={mdOpenLink}
       />
     ) : null
   }

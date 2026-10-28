@@ -79,6 +79,8 @@ export interface SavedPaneTab {
   docId: string
   cursor: number
   folds: Array<[number, number]>
+  /** mostrata come anteprima Markdown */
+  preview?: boolean
 }
 
 export interface SavedPane {

@@ -44,10 +44,12 @@ img { max-width: 100%; }
 @media (prefers-color-scheme: dark) { a { color: #58a6ff; } }
 `
 
-/** Pagina HTML con il Markdown convertito (GitHub Flavored Markdown). `marked` viene caricato al primo uso. */
-export async function markdownDocument(md: string): Promise<string> {
-  const body = await (await loadMarked()).parse(md)
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${MARKDOWN_STYLE}</style></head><body>${body}</body></html>`
+/** Markdown convertito in HTML (GitHub Flavored Markdown). `marked` viene caricato al primo uso. */
+export const markdownHtml = async (md: string) => (await loadMarked()).parse(md)
+
+/** Pagina HTML con il Markdown convertito; `head` si aggiunge dopo lo stile. */
+export async function markdownDocument(md: string, head = ''): Promise<string> {
+  return `<!doctype html><html><head><meta charset="utf-8"><style>${MARKDOWN_STYLE}</style>${head}</head><body>${await markdownHtml(md)}</body></html>`
 }
 
 const JSON_STYLE = `

@@ -90,7 +90,8 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
   const frame = useRef<HTMLIFrameElement>(null)
   // la pagina vuota si crea una volta sola: il contenuto arriva con postMessage
   const [shell, setShell] = useState<string | null>(null)
-  const [ready, setReady] = useState(false)
+  // cresce a ogni caricamento dell'iframe: spostato nella pagina, il browser lo ricarica vuoto
+  const [loads, setLoads] = useState(0)
   const key = `${paneId}\u0000${docId}`
 
   useEffect(() => {
@@ -100,7 +101,7 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.source !== frame.current?.contentWindow || e.data?.tag !== TAG) return
-      if (e.data.ready) setReady(true)
+      if (e.data.ready) setLoads((n) => n + 1)
       else if (typeof e.data.scroll === 'number') scrolls.set(key, e.data.scroll)
       else if (typeof e.data.open === 'string') {
         wb.focusPane(paneId)
@@ -123,7 +124,7 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
   }, [wb, paneId, docId, key, onOpenLink])
 
   useEffect(() => {
-    if (!ready) return
+    if (!loads) return
     let timer: number | undefined
     let gen = 0
     let first = true
@@ -151,7 +152,7 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
       clearTimeout(timer)
       gen++
     }
-  }, [wb, docId, key, assets, ready])
+  }, [wb, docId, key, assets, loads])
 
   return shell ? (
     <iframe

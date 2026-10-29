@@ -295,8 +295,10 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
             </button>
           ))}
           <div className="spacer" />
-          <button onMouseDown={(e) => e.preventDefault()} onClick={() => wb.togglePreview(pane.id, activeDoc!.id)} title="Mostra l'anteprima in questa tab (Ctrl+Enter); per averla accanto al testo, dividi il pannello">
-            {EYE} Anteprima
+          <button aria-label="Anteprima" onMouseDown={(e) => e.preventDefault()} onClick={() => wb.togglePreview(pane.id, activeDoc!.id)} title="Mostra l'anteprima in questa tab (Ctrl+Enter); per averla accanto al testo, dividi il pannello">
+            {EYE}
+            {/* sul telefono la scritta farebbe uscire la barra dallo schermo */}
+            {!compact && ' Anteprima'}
           </button>
         </div>
       )}

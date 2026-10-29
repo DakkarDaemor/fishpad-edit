@@ -570,9 +570,10 @@ export class Workbench {
       const docIds = [...to.docIds]
       const at = beforeDocId ? docIds.indexOf(beforeDocId) : -1
       docIds.splice(at < 0 ? docIds.length : at, 0, docId)
-      const previews = this.isPreview(fromPaneId, docId) ? [...(to.previews ?? []), docId] : to.previews
-      this.panes.set(toPaneId, { ...to, docIds, previews })
+      this.panes.set(toPaneId, { ...to, docIds })
     }
+    // la tab spostata resta un'anteprima, anche se il pannello aveva già lo stesso file come testo
+    if (this.isPreview(fromPaneId, docId)) this.setPreview(toPaneId, docId, true)
     this.closeTab(fromPaneId, docId, true)
     this.activate(toPaneId, docId)
   }

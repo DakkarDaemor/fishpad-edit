@@ -2,6 +2,11 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 16.1
+
+- Anteprima Markdown: non resta più bianca quando il browser ricarica la pagina dell'anteprima (per esempio spostando la tab o cambiando la disposizione dei pannelli). Spostata in un pannello che ha già lo stesso file come testo, la tab resta un'anteprima.
+- Sul telefono il pulsante dell'anteprima nella barra Markdown mostra solo l'occhio, così la barra non esce dallo schermo.
+
 ## 16.0
 
 - **Tre temi grigi**, meno estremi del bianco e del nero: **Nebbia** (grigio chiaro, testo scuro), **Ardesia** (grigio medio) e **Grafite** (grigio scuro, tra Ardesia e il nero), in Impostazioni → Aspetto. I colori della sintassi sono scelti per restare ben leggibili sul grigio.

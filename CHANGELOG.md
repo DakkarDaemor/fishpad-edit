@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 16.2
+
+- Riservatezza: mentre scrivi, il controllo dei tipi non contatta più esm.sh per i tipi dei pacchetti npm, a meno che tu non lo chieda. Si accende in Impostazioni → Aspetto → Tipi dei pacchetti npm (spenta di default); la ⓘ accanto spiega cosa viene inviato: solo il nome del pacchetto, mai il contenuto del file. Da spenta i pacchetti importati valgono `any`.
+
 ## 16.1
 
 - Anteprima Markdown: non resta più bianca quando il browser ricarica la pagina dell'anteprima (per esempio spostando la tab o cambiando la disposizione dei pannelli). Spostata in un pannello che ha già lo stesso file come testo, la tab resta un'anteprima.

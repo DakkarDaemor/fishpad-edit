@@ -114,10 +114,10 @@ const folderKey = (dir: FileSystemDirectoryHandle) => {
   return folderKeys.get(dir)!
 }
 
-function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck'>, systemDark: boolean): EditorSettings {
+function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck' | 'npmTypes'>, systemDark: boolean): EditorSettings {
   const palette = s.theme in PALETTES ? (s.theme as Palette) : null
   const dark = palette ? PALETTES[palette].dark : s.theme === 'dark' || (s.theme === 'system' && systemDark)
-  return { dark, palette, fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck }
+  return { dark, palette, fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck, npmTypes: s.npmTypes }
 }
 
 export default function App() {
@@ -1162,8 +1162,11 @@ export default function App() {
   }, [])
 
   // Impostazioni → editor
-  const { theme, fontSize, wrap, typeCheck } = settings
-  const editorSettings = useMemo(() => toEditorSettings({ theme, fontSize, wrap, typeCheck }, systemDark), [theme, fontSize, wrap, typeCheck, systemDark])
+  const { theme, fontSize, wrap, typeCheck, npmTypes } = settings
+  const editorSettings = useMemo(
+    () => toEditorSettings({ theme, fontSize, wrap, typeCheck, npmTypes }, systemDark),
+    [theme, fontSize, wrap, typeCheck, npmTypes, systemDark],
+  )
   useEffect(() => {
     document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
     if (editorSettings.palette) document.documentElement.dataset.palette = editorSettings.palette

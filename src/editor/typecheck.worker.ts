@@ -1,4 +1,4 @@
-import { checkTypes, completionDetail, completions, quickInfo } from './typecheck'
+import { allowNpmTypes, checkTypes, completionDetail, completions, quickInfo } from './typecheck'
 import type { TypeRequest } from './typeLint'
 
 export type TypeReply = { id: number; result?: unknown; error?: string }
@@ -7,6 +7,7 @@ export type TypeReply = { id: number; result?: unknown; error?: string }
 const scope = self as unknown as { onmessage: (e: MessageEvent<TypeRequest>) => void; postMessage(reply: TypeReply): void }
 
 function handle(r: TypeRequest) {
+  allowNpmTypes(r.npm)
   switch (r.kind) {
     case 'check':
       return checkTypes(r.code, r.lang)

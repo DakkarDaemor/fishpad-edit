@@ -18,6 +18,8 @@ export interface Settings {
   wrap: boolean
   /** controllo dei tipi nei file TypeScript e TSX */
   typeCheck: boolean
+  /** tipi dei pacchetti npm da esm.sh mentre si scrive: spenta, dall'editor non esce niente */
+  npmTypes: boolean
   /** barra laterale con preferiti ed esplora file */
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   fontSize: 14,
   wrap: false,
   typeCheck: true,
+  npmTypes: false,
   sidebar: false,
   diff: { collapse: true, normalize: false },
   save: { trimTrailing: false, finalNewline: false },

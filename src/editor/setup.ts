@@ -36,7 +36,7 @@ import { foldLevel, indentationFolding, restoreFoldEffects } from './folding'
 import { loadLanguage } from './languages'
 import { DEFAULT_INDENT, indentCompartment, indentExtension, type Indent } from './indentation'
 import { webExtensions } from './web'
-import { typeCheckEnabled } from './typeLint'
+import { npmTypesEnabled, typeCheckEnabled } from './typeLint'
 import { paletteExtension, type Palette } from './themes'
 
 /**
@@ -73,6 +73,7 @@ export const themeCompartment = new Compartment()
 export const fontCompartment = new Compartment()
 export const wrapCompartment = new Compartment()
 export const typeCheckCompartment = new Compartment()
+const typeCheckExtension = (s: EditorSettings) => [typeCheckEnabled.of(s.typeCheck), npmTypesEnabled.of(s.npmTypes)]
 /** Emmet, colori CSS, controllo JSON: dipendono dal linguaggio (vedi web.ts) */
 export const webCompartment = new Compartment()
 
@@ -84,6 +85,8 @@ export interface EditorSettings {
   wrap: boolean
   /** controllo dei tipi TypeScript/TSX (vedi typeLint.ts) */
   typeCheck: boolean
+  /** tipi dei pacchetti npm scaricati da esm.sh */
+  npmTypes: boolean
 }
 
 // Un solo listener condiviso: gli EditorState delle tab vengono scambiati nella stessa view.
@@ -218,7 +221,7 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     themeCompartment.of(themeExtension(settings)),
     fontCompartment.of(fontExtension(settings.fontSize)),
     wrapCompartment.of(wrapExtension(settings.wrap)),
-    typeCheckCompartment.of(typeCheckEnabled.of(settings.typeCheck)),
+    typeCheckCompartment.of(typeCheckExtension(settings)),
     EditorView.updateListener.of((u) => updateHandler?.(u)),
   ]
 }
@@ -245,7 +248,7 @@ export function settingsEffects(settings: EditorSettings) {
     themeCompartment.reconfigure(themeExtension(settings)),
     fontCompartment.reconfigure(fontExtension(settings.fontSize)),
     wrapCompartment.reconfigure(wrapExtension(settings.wrap)),
-    typeCheckCompartment.reconfigure(typeCheckEnabled.of(settings.typeCheck)),
+    typeCheckCompartment.reconfigure(typeCheckExtension(settings)),
   ]
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checkTypes, completionDetail, completions, quickInfo } from '../typecheck'
+import { allowNpmTypes, checkTypes, completionDetail, completions, quickInfo } from '../typecheck'
 
 // esm.sh finto: "fake-pkg" ha i tipi (con un import relativo), "untyped-pkg" no
 const REMOTE: Record<string, string> = {
@@ -34,8 +34,17 @@ describe('checkTypes', () => {
     expect((await messages("import { useState } from 'react'\nconst [s] = useState('a')\nconst x: number = s\nexport default () => <div foo={1} />", 'TSX')).length).toBe(2)
   }, 30_000)
 
+  it('pacchetti npm spenti: nessuna richiesta, tutto any', async () => {
+    const fetch = vi.fn(fakeFetch)
+    vi.stubGlobal('fetch', fetch)
+    allowNpmTypes(false)
+    expect(await messages("import { sum } from 'fake-pkg'\nconst s: string = sum(1, 2)")).toEqual([])
+    expect(fetch).not.toHaveBeenCalled()
+  }, 30_000)
+
   it('pacchetti npm: tipi da esm.sh seguendo gli import, any se mancano', async () => {
     vi.stubGlobal('fetch', vi.fn(fakeFetch))
+    allowNpmTypes(true)
     expect(await messages("import { sum } from 'fake-pkg'\nimport x from 'untyped-pkg'\nconst s: string = sum(1, 2)\nx.qualsiasi()")).toEqual([
       "Type 'number' is not assignable to type 'string'.",
     ])

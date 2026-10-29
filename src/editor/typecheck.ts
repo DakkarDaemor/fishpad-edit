@@ -5,8 +5,8 @@ import type { TypeLang } from './typeLint'
  * Controllo dei tipi di TypeScript e TSX, eseguito nel worker di typecheck.worker.ts.
  * File system virtuale con:
  * - librerie standard (ESNext + DOM) e tipi di React dai pacchetti dell'app, caricati al primo uso: funzionano offline;
- * - tipi dei pacchetti npm presi da esm.sh (header X-TypeScript-Types), seguendo i loro import;
- *   i pacchetti senza tipi (o con la rete assente) diventano `any`.
+ * - tipi dei pacchetti npm presi da esm.sh (header X-TypeScript-Types), seguendo i loro import, solo se
+ *   l'impostazione lo consente (vedi allowNpmTypes); i pacchetti senza tipi (o con la rete assente) diventano `any`.
  */
 
 export interface TypeDiagnostic {
@@ -55,6 +55,10 @@ const packageTypes = new Map<string, Promise<string | null>>()
 const remote = new Set<string>()
 let libsLoaded: Promise<void> | undefined
 let reactLoaded: Promise<void> | undefined
+/** spenta: nessuna richiesta a esm.sh, i pacchetti non ancora caricati restano `any` */
+let npmTypes = false
+
+export const allowNpmTypes = (on: boolean) => void (npmTypes = on)
 
 const isUrl = (s: string) => /^https?:\/\//.test(s)
 const isRelative = (s: string) => /^\.{0,2}\//.test(s)
@@ -190,10 +194,14 @@ async function prepare(code: string, lang: TypeLang): Promise<string> {
   const specs = ts.preProcessFile(code, true, true).importedFiles.map((f) => f.fileName).filter((s) => !isRelative(s))
   await loadLibs()
   if (lang === 'TSX' || specs.some(isReact)) await loadReact()
-  const found = await Promise.all(specs.filter((s) => !isReact(s)).map(async (s) => [s, await loadPackage(s)] as const))
+  const found = await Promise.all(
+    specs.filter((s) => !isReact(s)).map(async (s) => [s, npmTypes ? await loadPackage(s) : (typed.get(s) ?? null)] as const),
+  )
   for (const [s, url] of found) {
-    if (url) typed.set(s, url)
-    else untyped.add(s)
+    if (url) {
+      typed.set(s, url)
+      untyped.delete(s)
+    } else untyped.add(s)
   }
   const main = lang === 'TSX' ? '/main.tsx' : '/main.ts'
   setText(main, code)

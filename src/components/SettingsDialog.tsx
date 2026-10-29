@@ -81,6 +81,27 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
               <label className="check">
                 <input type="checkbox" checked={settings.typeCheck} onChange={(e) => onChange({ typeCheck: e.target.checked })} /> Controllo dei tipi (TypeScript e TSX)
               </label>
+              <div className="check-row">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={settings.npmTypes}
+                    disabled={!settings.typeCheck}
+                    aria-describedby="npm-types-note"
+                    onChange={(e) => onChange({ npmTypes: e.target.checked })}
+                  />{' '}
+                  Tipi dei pacchetti npm (da esm.sh)
+                </label>
+                {/* il tabIndex fa aprire la nota anche col tocco e da tastiera, non solo al passaggio del mouse */}
+                <span className="info" tabIndex={0} aria-label="Cosa viene inviato">
+                  ⓘ
+                  <span className="info-tip" role="tooltip" id="npm-types-note">
+                    Spenta: i pacchetti importati restano senza tipi (any) e dall'editor non esce niente. Accesa: mentre scrivi, il nome di ogni
+                    pacchetto importato (o l'URL dell'import) viene chiesto a esm.sh per scaricarne i tipi. Il contenuto del file non viene mai
+                    inviato.
+                  </span>
+                </span>
+              </div>
               <h3>Al salvataggio</h3>
               <label className="check">
                 <input type="checkbox" checked={settings.save.trimTrailing} onChange={(e) => setSave({ trimTrailing: e.target.checked })} /> Rimuovi spazi a fine riga (non nel Markdown)

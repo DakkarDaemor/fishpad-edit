@@ -600,6 +600,16 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--f
 .form { display: flex; flex-direction: column; gap: 12px; padding-top: 14px; }
 .form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-muted); }
 .form label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--fg); font-size: 13px; }
+.form label.check:has(:disabled) { color: var(--fg-muted); }
+.check-row { display: flex; align-items: center; gap: 6px; position: relative; }
+.info { cursor: help; color: var(--fg-muted); font-size: 13px; border-radius: 50%; outline-offset: 2px; }
+.info:hover, .info:focus { color: var(--accent); }
+.info-tip {
+  display: none; position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; z-index: 10;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg);
+  color: var(--fg); font-size: 12px; line-height: 1.5; box-shadow: 0 4px 12px rgb(0 0 0 / 0.2);
+}
+.info:hover .info-tip, .info:focus .info-tip { display: block; }
 .form input:not([type='checkbox']), .form textarea {
   padding: 5px 8px; font: 13px var(--font-mono); color: var(--fg); background: var(--bg);
   border: 1px solid var(--border); border-radius: 4px; outline: none; resize: vertical;

@@ -1,6 +1,6 @@
 import type { CompletionContext, CompletionResult } from '@codemirror/autocomplete'
 import type { Diagnostic } from '@codemirror/lint'
-import { Facet } from '@codemirror/state'
+import { Facet, type EditorState } from '@codemirror/state'
 import { hoverTooltip, type EditorView, type ViewUpdate } from '@codemirror/view'
 import type { TypeCompletion, TypeDiagnostic, TypeInfo } from './typecheck'
 import type { TypeReply } from './typecheck.worker'
@@ -11,7 +11,8 @@ import type { TypeReply } from './typecheck.worker'
  */
 
 export type TypeLang = 'TypeScript' | 'TSX'
-type Base = { id: number; code: string; lang: TypeLang }
+/** npm: tipi dei pacchetti scaricabili da esm.sh */
+type Base = { id: number; code: string; lang: TypeLang; npm: boolean }
 export type TypeRequest =
   | (Base & { kind: 'check' })
   | (Base & { kind: 'complete'; pos: number })
@@ -21,8 +22,12 @@ export type TypeRequest =
 /** Impostazione "Controllo dei tipi", messa nello state da setup.ts: spenta, niente errori, suggerimenti né tooltip. */
 export const typeCheckEnabled = Facet.define<boolean, boolean>({ combine: (v) => v.at(-1) ?? true })
 
-/** Riesegue il linter quando l'impostazione cambia (accesa: ricontrolla; spenta: toglie gli errori). */
-export const typeCheckChanged = (u: ViewUpdate) => u.startState.facet(typeCheckEnabled) !== u.state.facet(typeCheckEnabled)
+/** Impostazione "Tipi dei pacchetti npm": spenta, nessuna richiesta a esm.sh mentre si scrive. */
+export const npmTypesEnabled = Facet.define<boolean, boolean>({ combine: (v) => v.at(-1) ?? false })
+
+/** Riesegue il linter quando un'impostazione cambia (accesa: ricontrolla; spenta: toglie gli errori). */
+export const typeCheckChanged = (u: ViewUpdate) =>
+  u.startState.facet(typeCheckEnabled) !== u.state.facet(typeCheckEnabled) || u.startState.facet(npmTypesEnabled) !== u.state.facet(npmTypesEnabled)
 
 let worker: Worker | null = null
 let nextId = 0
@@ -44,20 +49,20 @@ function getWorker() {
   return worker
 }
 
-type Request = TypeRequest extends infer R ? (R extends TypeRequest ? Omit<R, 'id'> : never) : never
+type Request = TypeRequest extends infer R ? (R extends TypeRequest ? Omit<R, 'id' | 'npm'> : never) : never
 
-async function ask<T>(req: Request): Promise<T | undefined> {
+async function ask<T>(state: EditorState, req: Request): Promise<T | undefined> {
   const id = nextId++
   const reply = await new Promise<TypeReply>((resolve) => {
     pending.set(id, resolve)
-    getWorker().postMessage({ ...req, id })
+    getWorker().postMessage({ ...req, id, npm: state.facet(npmTypesEnabled) })
   })
   return reply.result as T | undefined
 }
 
 export const typeLintSource = (lang: TypeLang) => async (view: EditorView): Promise<Diagnostic[]> => {
   if (!view.state.facet(typeCheckEnabled)) return []
-  const diags = await ask<TypeDiagnostic[]>({ kind: 'check', code: view.state.doc.toString(), lang })
+  const diags = await ask<TypeDiagnostic[]>(view.state, { kind: 'check', code: view.state.doc.toString(), lang })
   const max = view.state.doc.length
   return (diags ?? []).map((d) => ({ ...d, from: Math.min(d.from, max), to: Math.min(d.to, max), source: 'TypeScript' }))
 }
@@ -77,7 +82,7 @@ export const typeCompletionSource = (lang: TypeLang) => async (ctx: CompletionCo
   const word = ctx.matchBefore(/[\w$]*/)!
   const afterDot = /\.$/.test(ctx.state.sliceDoc(word.from - 1, word.from))
   if (!ctx.explicit && word.from === word.to && !afterDot) return null
-  const items = await ask<TypeCompletion[] | null>({ kind: 'complete', code: ctx.state.doc.toString(), lang, pos: ctx.pos })
+  const items = await ask<TypeCompletion[] | null>(ctx.state, { kind: 'complete', code: ctx.state.doc.toString(), lang, pos: ctx.pos })
   if (!items || ctx.aborted) return null
   const view = ctx.view
   return {
@@ -88,7 +93,7 @@ export const typeCompletionSource = (lang: TypeLang) => async (ctx: CompletionCo
       // firma e documentazione si chiedono solo per la voce evidenziata, sul testo di quel momento
       info: view
         ? async () => {
-            const d = await ask<TypeInfo | null>({ kind: 'detail', code: view.state.doc.toString(), lang, pos: view.state.selection.main.head, name: it.label })
+            const d = await ask<TypeInfo | null>(view.state, { kind: 'detail', code: view.state.doc.toString(), lang, pos: view.state.selection.main.head, name: it.label })
             return d ? infoDom(d) : null
           }
         : undefined,
@@ -100,7 +105,7 @@ export const typeCompletionSource = (lang: TypeLang) => async (ctx: CompletionCo
 export const typeHover = (lang: TypeLang) =>
   hoverTooltip(async (view, pos) => {
     if (!view.state.facet(typeCheckEnabled)) return null
-    const q = await ask<TypeInfo | null>({ kind: 'hover', code: view.state.doc.toString(), lang, pos })
+    const q = await ask<TypeInfo | null>(view.state, { kind: 'hover', code: view.state.doc.toString(), lang, pos })
     if (!q) return null
     return { pos: q.from ?? pos, end: q.to, above: true, create: () => ({ dom: infoDom(q) }) }
   })

@@ -136,6 +136,7 @@ const KEY_FOLDERS = 'folders'
 const KEY_RECENT_FOLDERS = 'recentFolders'
 const KEY_BOOKMARKS = 'bookmarks'
 const KEY_SEEN_NOTICES = 'seenNotices'
+const KEY_TODOS = 'todos'
 const MAX_RECENTS = 12
 
 // IndexedDB può non essere disponibile (navigazione privata, storage bloccato): non deve rompere l'app.
@@ -246,3 +247,13 @@ export const saveBookmarks = (list: Bookmark[]) =>
 /** Avvisi sui limiti del dispositivo già mostrati (vedi notices.ts). */
 export const loadSeenNotices = () => safe(async () => (await get<string[]>(KEY_SEEN_NOTICES)) ?? [], [] as string[])
 export const saveSeenNotices = (ids: string[]) => safe(() => set(KEY_SEEN_NOTICES, ids), undefined)
+
+/** Cosa da fare della barra laterale. */
+export interface Todo {
+  id: string
+  text: string
+  done: boolean
+}
+
+export const loadTodos = () => safe(async () => (await get<Todo[]>(KEY_TODOS)) ?? [], [] as Todo[])
+export const saveTodos = (list: Todo[]) => safe(() => set(KEY_TODOS, list), undefined)

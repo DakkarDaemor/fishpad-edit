@@ -5,13 +5,18 @@ interface Props {
   onResize: (width: number) => void
   /** schermo del telefono: un cassetto sopra l'editor, che si chiude toccando fuori */
   drawer?: { onClose: () => void }
+  /** chiusa: resta solo il bordo, che col doppio clic la riapre */
+  collapsed?: boolean
+  /** doppio clic sul bordo: chiude o riapre */
+  onToggle?: () => void
   children: ReactNode
 }
 
-/** Barra laterale a sinistra, ridimensionabile trascinando il bordo destro. */
-export function Sidebar({ width, onResize, drawer, children }: Props) {
+/** Barra laterale a sinistra, ridimensionabile trascinando il bordo destro; doppio clic sul bordo la chiude o riapre. */
+export function Sidebar({ width, onResize, drawer, collapsed, onToggle, children }: Props) {
   const drag = useRef<{ x: number; w: number } | null>(null)
   const onDown = (e: ReactPointerEvent) => {
+    if (collapsed) return
     e.currentTarget.setPointerCapture(e.pointerId)
     drag.current = { x: e.clientX, w: width }
   }
@@ -30,10 +35,17 @@ export function Sidebar({ width, onResize, drawer, children }: Props) {
   }
   return (
     <>
-      <aside className="sidebar" style={{ width }}>
-        {children}
-      </aside>
-      <div className="gutter sidebar-gutter" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)} />
+      {!collapsed && (
+        <aside className="sidebar" style={{ width }}>
+          {children}
+        </aside>
+      )}
+      <div
+        className={`gutter sidebar-gutter${collapsed ? ' collapsed' : ''}`}
+        title={collapsed ? 'Doppio clic: apri la barra laterale' : 'Trascina per allargare, doppio clic per chiudere'}
+        onDoubleClick={onToggle}
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={() => (drag.current = null)}
+      />
     </>
   )
 }

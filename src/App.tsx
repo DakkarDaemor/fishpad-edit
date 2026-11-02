@@ -83,6 +83,7 @@ import { addVersion, listVersions, readVersion, sizeLabel, versionLabel } from '
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
 import { Sidebar } from './components/Sidebar'
+import { TodoList } from './components/TodoList'
 import { BookmarkList } from './components/BookmarkList'
 import { FileTree, NoFolder } from './components/FileTree'
 import { UrlDialog, type UrlDialogResult } from './components/UrlDialog'
@@ -1537,8 +1538,14 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {(compact ? drawerOpen : settings.sidebar) && (
-          <Sidebar width={sidebarWidth} onResize={setSidebarWidth} drawer={compact ? { onClose: () => setDrawerOpen(false) } : undefined}>
+        {(!compact || drawerOpen) && (
+          <Sidebar
+            width={sidebarWidth}
+            onResize={setSidebarWidth}
+            drawer={compact ? { onClose: () => setDrawerOpen(false) } : undefined}
+            collapsed={!compact && !settings.sidebar}
+            onToggle={toggleSidebar}
+          >
             <BookmarkList
               list={bookmarks.list}
               canAdd={!!(active?.handle || active?.request)}
@@ -1549,6 +1556,7 @@ export default function App() {
               onRemove={bookmarks.remove}
               onMove={bookmarks.move}
             />
+            <TodoList />
             {folders.length ? (
               folders.map((dir) => (
                 <FileTree

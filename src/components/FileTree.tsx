@@ -282,12 +282,16 @@ export function NoFolder({ supported, onOpenFolder, recent, onOpenRecent }: {
   recent: FileSystemDirectoryHandle[]
   onOpenRecent: (dir: FileSystemDirectoryHandle) => void
 }) {
+  const [collapsed, setCollapsed] = useState(false)
   return (
-    <section className="side-section tree-section">
+    <section className={`side-section tree-section${collapsed ? ' collapsed' : ''}`}>
       <header className="side-header">
-        <span className="panel-title">Esplora</span>
+        <button className="tree-toggle" onClick={() => setCollapsed((c) => !c)} aria-expanded={!collapsed} title={collapsed ? 'Mostra' : 'Nascondi'}>
+          <span className="tree-twisty">{collapsed ? '▸' : '▾'}</span>
+          <span className="panel-title">Esplora</span>
+        </button>
       </header>
-      <div className="side-empty">
+      <div className="side-empty" hidden={collapsed}>
         {supported ? (
           <>
             <p>Nessuna cartella aperta. I suoi file si aprono con un clic, e l'anteprima HTML carica da lì CSS, script e immagini.</p>

@@ -2,6 +2,12 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 17.0
+
+- **Da fare nella barra laterale**: una lista di cose da fare sotto i Preferiti. Si scrive nel campo e Invio aggiunge la voce; la casella la spunta, ✕ la toglie e ✓✕ toglie tutte quelle fatte. Il titolo conta quelle rimaste. La lista resta sul dispositivo, come i preferiti.
+- I blocchi della barra laterale (Preferiti, Da fare, cartelle) sono separati da una fascia spessa e hanno l'intestazione tinta. Si aprono e chiudono come una fisarmonica cliccando in un punto qualsiasi dell'intestazione, anche Esplora quando non c'è una cartella aperta.
+- Il bordo della barra laterale è più spesso e il doppio clic la chiude; chiusa resta il bordo, e un altro doppio clic la riapre.
+
 ## 16.2
 
 - Riservatezza: mentre scrivi, il controllo dei tipi non contatta più esm.sh per i tipi dei pacchetti npm, a meno che tu non lo chieda. Si accende in Impostazioni → Aspetto → Tipi dei pacchetti npm (spenta di default); la ⓘ accanto spiega cosa viene inviato: solo il nome del pacchetto, mai il contenuto del file. Da spenta i pacchetti importati valgono `any`.

@@ -2,6 +2,16 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 18.0
+
+- **Note delle cose da fare**: accanto a ogni voce di Da fare, 📝 apre una tab Markdown dove descriverla con calma. Il testo si salva da solo nella voce (non serve Ctrl+S) e resta anche chiudendo la tab; le voci con una nota mostrano sempre la 📝. Togliendo una voce con la nota aperta, la tab resta come tab non salvata, così il testo non si perde.
+- **Da una tab a una cosa da fare**: trascina una tab sul blocco Da fare, oppure dal menu della tab scegli «Crea cosa da fare» (anche sul telefono). Il nome della tab diventa la voce. Un file o un URL resta collegato: 🔗 lo riapre, o mostra la sua tab se è già aperta, senza copie. Una tab mai salvata diventa direttamente la nota. Una tab che è già in Da fare non si aggiunge una seconda volta.
+
+## 17.1
+
+- Barra laterale: più spazio tra l'intestazione e il campo di Da fare e di ricerca dei Preferiti; le voci di Da fare sono più distanziate tra loro.
+- Il blocco Da fare ha uno sfondo e un'intestazione leggermente tinti col colore d'accento del tema, per distinguerlo dagli altri.
+
 ## 17.0
 
 - **Da fare nella barra laterale**: una lista di cose da fare sotto i Preferiti. Si scrive nel campo e Invio aggiunge la voce; la casella la spunta, ✕ la toglie e ✓✕ toglie tutte quelle fatte. Il titolo conta quelle rimaste. La lista resta sul dispositivo, come i preferiti.

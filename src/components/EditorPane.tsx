@@ -10,7 +10,9 @@ import { MarkdownPreview } from './MarkdownPreview'
 import { MARKDOWN_ACTIONS, runMarkdownAction } from '../editor/markdownEdit'
 import type { PreviewAssets } from '../runner/folderAssets'
 
-const TAB_MIME = 'application/x-fishpad-tab'
+export const TAB_MIME = 'application/x-fishpad-tab'
+/** presente quando la tab trascinata è già la nota di una cosa da fare (durante dragover si leggono solo i tipi) */
+export const TODO_NOTE_MIME = 'application/x-fishpad-todo-note'
 
 interface Props {
   wb: Workbench
@@ -32,7 +34,7 @@ interface Props {
   mdOpenLink?: (docId: string, href: string) => void
 }
 
-interface DraggedTab {
+export interface DraggedTab {
   docId: string
   fromPaneId: string
 }
@@ -148,6 +150,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
             draggable={!touch}
             onDragStart={(e) => {
               e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))
+              if (d.todoId) e.dataTransfer.setData(TODO_NOTE_MIME, '')
               e.dataTransfer.effectAllowed = 'copyMove'
             }}
             onClick={() => wb.activate(pane.id, id)}

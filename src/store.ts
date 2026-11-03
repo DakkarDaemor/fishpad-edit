@@ -75,6 +75,8 @@ export interface SavedDoc {
   /** tab collegata a un URL: la richiesta per ricaricarla e l'esito dell'ultima */
   request?: UrlRequest
   response?: UrlResponse
+  /** tab con la nota di una cosa da fare */
+  todoId?: string
 }
 
 /** Un documento aperto in un pannello: cursore e blocchi chiusi sono per pannello. */
@@ -253,7 +255,23 @@ export interface Todo {
   id: string
   text: string
   done: boolean
+  /** descrizione più lunga, scritta in una tab (Markdown) */
+  note?: string
+  /** file o URL a cui si riferisce: il clic apre quello, al posto della nota */
+  link?: Bookmark
 }
 
-export const loadTodos = () => safe(async () => (await get<Todo[]>(KEY_TODOS)) ?? [], [] as Todo[])
-export const saveTodos = (list: Todo[]) => safe(() => set(KEY_TODOS, list), undefined)
+export const loadTodos = () =>
+  safe(async () => {
+    const saved = (await get<Todo[]>(KEY_TODOS)) ?? []
+    return Promise.all(
+      saved.map(async ({ link, ...t }): Promise<Todo> => {
+        if (link?.kind !== 'file') return { ...t, ...(link && { link }) }
+        const unpacked = await unpack<FileBookmark>(link as unknown as Packed<FileBookmark>)
+        // file dello spazio dell'app che non esiste più: la voce resta, senza collegamento
+        return unpacked.handle ? { ...t, link: unpacked } : t
+      }),
+    )
+  }, [] as Todo[])
+export const saveTodos = (list: Todo[]) =>
+  safe(async () => set(KEY_TODOS, await Promise.all(list.map(async (t) => (t.link?.kind === 'file' ? { ...t, link: await pack(t.link) } : t)))), undefined)

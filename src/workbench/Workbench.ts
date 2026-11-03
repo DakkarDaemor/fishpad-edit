@@ -41,6 +41,8 @@ export interface Doc {
   request?: UrlRequest
   /** esito dell'ultima richiesta */
   response?: UrlResponse
+  /** tab con la nota di una cosa da fare: il testo si salva nella voce, non su disco */
+  todoId?: string
 }
 
 /** Contenuto letto da disco con cui sostituire quello di un documento. */
@@ -94,6 +96,7 @@ export interface NewDocInput {
   color?: TabColor
   request?: UrlRequest
   response?: UrlResponse
+  todoId?: string
 }
 
 /** Segna le modifiche replicate da un altro pannello sullo stesso documento (da non replicare di nuovo). */
@@ -303,6 +306,11 @@ export class Workbench {
     return changes.length ? `Convertite ${changes.length} righe in ${indentLabel(to)}` : 'Niente da convertire'
   }
 
+  /** Tab con la nota della cosa da fare. */
+  findByTodo(todoId: string) {
+    return [...this.docs.values()].find((d) => d.todoId === todoId)
+  }
+
   /** Documento collegato all'URL indicato. */
   findByUrl(url: string) {
     return [...this.docs.values()].find((d) => d.request?.url === url)
@@ -364,6 +372,7 @@ export class Workbench {
       color: input.color,
       request: input.request,
       response: input.response,
+      todoId: input.todoId,
     }
     this.docs.set(id, doc)
     this.createInstance(paneId, doc, input.content, input.cursor, input.folds)
@@ -468,9 +477,9 @@ export class Workbench {
   private rememberClosed(paneId: string, doc: Doc, st: EditorState | undefined) {
     if (!st || this.isBlank(doc.id)) return
     const content = st.doc.toString()
-    const { id, name, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response } = doc
+    const { id, name, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response, todoId } = doc
     // stesso id: la tab riaperta ritrova la sua cronologia locale
-    const input: NewDocInput = { id, name, content, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response }
+    const input: NewDocInput = { id, name, content, lang, langAuto, indent, indentAuto, dirty, eol, encoding, handle, mtime, color, request, response, todoId }
     this.closed = [...this.closed, { paneId, input: { ...input, cursor: st.selection.main.head } }].slice(-20)
     this.closeListeners.forEach((fn) => fn(doc, content))
   }
@@ -688,7 +697,8 @@ export class Workbench {
       }
       if (local) {
         const doc = this.docs.get(docId)
-        if (doc && !doc.dirty) {
+        // la nota di una cosa da fare si salva da sola (vedi App)
+        if (doc && !doc.dirty && !doc.todoId) {
           this.docs.set(docId, { ...doc, dirty: true })
           changed = true
         }

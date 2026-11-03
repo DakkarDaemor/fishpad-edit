@@ -52,6 +52,7 @@ import {
   saveSeenNotices,
   saveSettings,
   type Bookmark,
+  type Todo,
   type DiffPrefs,
   type RecentFile,
   type Settings,
@@ -59,6 +60,7 @@ import {
 import { fetchUrl, fileBaseName, languageFor, tabNameFor, type UrlRequest } from './remote'
 import { renameEntry, type TreeEntry } from './explorer'
 import { bookmarkFor, findDuplicate, useBookmarks } from './bookmarks'
+import { plainTabName, todoTabName, useTodos } from './todos'
 import { encode, type Encoding } from './encoding'
 import { Workbench, type Doc } from './workbench/Workbench'
 import type { Indent } from './editor/indentation'
@@ -154,6 +156,7 @@ export default function App() {
   const [resolved, setResolved] = useState<{ folder: FileSystemDirectoryHandle; handle: FileSystemFileHandle; path: string | null } | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(250)
   const bookmarks = useBookmarks()
+  const todos = useTodos()
   const [urlDialog, setUrlDialog] = useState<UrlDialogState | null>(null)
   /** schermo del telefono: un pannello alla volta, barra laterale a cassetto, anteprima sopra l'editor */
   const compact = useMediaQuery(COMPACT_QUERY)
@@ -308,6 +311,10 @@ export default function App() {
   async function save(docId = wb.activeDoc?.id, forceSaveAs = false) {
     const doc = wb.doc(docId)
     if (!doc) return
+    if (doc.todoId && !forceSaveAs) {
+      flash('La nota si salva da sola nella cosa da fare')
+      return
+    }
     try {
       if (doc.handle && !forceSaveAs) {
         if (!(await ensurePermission(doc.handle, 'readwrite'))) throw new Error('Permesso di scrittura negato')
@@ -338,7 +345,8 @@ export default function App() {
       if (handle) {
         // una tab URL salvata su disco diventa quel file
         const mtime = (await diskMtime(handle)) ?? undefined
-        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false, mtime, request: undefined, response: undefined })
+        // salvata come file, la nota non segue più la cosa da fare (che tiene il testo fin qui)
+        wb.patchDoc(doc.id, { handle, name: handle.name, dirty: false, mtime, request: undefined, response: undefined, todoId: undefined })
         setRecents(await addRecent(handle))
         const byName = detectByFilename(handle.name)
         if (byName && byName !== doc.lang) void wb.setLanguage(doc.id, byName, false)
@@ -568,6 +576,49 @@ export default function App() {
   }
 
   // ---------- cartella (esplora file) ----------
+
+  // ---------- da fare ----------
+
+  /** Apre il file o l'URL della cosa da fare, o la tab con la sua nota; se è già aperta, la mostra. */
+  function openTodoNote(todo: Todo) {
+    if (todo.link) {
+      openBookmark(todo.link)
+      return
+    }
+    setDrawerOpen(false)
+    const open = wb.findByTodo(todo.id)
+    if (open) {
+      showDoc(open.id)
+      return
+    }
+    void replacingBlank(async () => {
+      wb.addDoc({ name: todoTabName(todo.text), content: todo.note ?? '', eol: 'LF', lang: 'Markdown', langAuto: false, todoId: todo.id })
+    })
+  }
+
+  /**
+   * Nuova cosa da fare dalla tab, col suo nome. Un file o un URL resta collegato (il clic lo riapre);
+   * una tab mai salvata diventa la nota stessa.
+   */
+  async function todoFromTab(docId = wb.activeDoc?.id) {
+    const doc = wb.doc(docId)
+    if (!doc) return
+    const link = bookmarkFor(doc)
+    const linked = link && (await findDuplicate(todos.list.flatMap((t) => t.link ?? []), link))
+    if (doc.todoId || linked) {
+      flash('Questa tab è già in Da fare')
+      return
+    }
+    const text = plainTabName(doc.name)
+    if (link) {
+      todos.add(text, undefined, link)
+    } else {
+      const content = wb.content(doc.id)
+      const todo = todos.add(text, content.trim() ? content : undefined)
+      wb.patchDoc(doc.id, { todoId: todo.id, name: todoTabName(text), dirty: false })
+    }
+    flash(`Aggiunta a Da fare: ${text}`)
+  }
 
   function setFolders(list: FileSystemDirectoryHandle[]) {
     setFoldersState(list)
@@ -1108,6 +1159,24 @@ export default function App() {
     }
   }, [wb, runner, folders.length])
 
+  // Il testo delle note delle cose da fare va nella loro voce
+  const setTodoNote = todos.setNote
+  useEffect(
+    () =>
+      wb.onContentChange((docId) => {
+        const todoId = wb.doc(docId)?.todoId
+        if (todoId) setTodoNote(todoId, wb.content(docId))
+      }),
+    [wb, setTodoNote],
+  )
+
+  // Cosa da fare tolta con la sua nota aperta: la tab resta, come una tab non salvata, per non perdere il testo
+  useEffect(() => {
+    if (!todos.loaded) return
+    const ids = new Set(todos.list.map((t) => t.id))
+    for (const d of snap.docs.values()) if (d.todoId && !ids.has(d.todoId)) wb.patchDoc(d.id, { todoId: undefined, dirty: true, name: plainTabName(d.name) })
+  }, [wb, snap.docs, todos.list, todos.loaded])
+
   // Cronologia locale: il testo alla chiusura di una tab, e ogni 5 minuti quello delle tab cambiate
   useEffect(() => {
     const changed = new Set<string>()
@@ -1453,6 +1522,7 @@ export default function App() {
       : []),
     ...(doc.request ? [{ label: "Ricarica dall'URL", action: () => void refreshUrl(doc.id) }] : []),
     { label: 'Aggiungi ai preferiti', disabled: !doc.handle && !doc.request, action: () => bookmarkDoc(doc.id) },
+    { label: 'Crea cosa da fare', disabled: !!doc.todoId, action: () => void todoFromTab(doc.id) },
     'separator',
   ]
 
@@ -1556,7 +1626,15 @@ export default function App() {
               onRemove={bookmarks.remove}
               onMove={bookmarks.move}
             />
-            <TodoList />
+            <TodoList
+              list={todos.list}
+              onAdd={(text) => void todos.add(text)}
+              onToggle={todos.toggle}
+              onRemove={todos.remove}
+              onRemoveDone={todos.removeDone}
+              onOpenNote={openTodoNote}
+              onDropTab={(docId) => void todoFromTab(docId)}
+            />
             {folders.length ? (
               folders.map((dir) => (
                 <FileTree

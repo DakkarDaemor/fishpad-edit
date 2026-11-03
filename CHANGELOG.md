@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 18.1
+
+- Il menu Aiuto non ha più il link al codice sorgente su GitHub.
+
 ## 18.0
 
 - **Note delle cose da fare**: accanto a ogni voce di Da fare, 📝 apre una tab Markdown dove descriverla con calma. Il testo si salva da solo nella voce (non serve Ctrl+S) e resta anche chiudendo la tab; le voci con una nota mostrano sempre la 📝. Togliendo una voce con la nota aperta, la tab resta come tab non salvata, così il testo non si perde.

@@ -93,7 +93,6 @@ import { Runner } from './runner/Runner'
 import { runTarget } from './runner/transpile'
 import { folderAssets } from './runner/folderAssets'
 
-const REPO_URL = 'https://github.com/DakkarDaemor/fishpad-edit'
 const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
 /** Oltre questa dimensione una risposta JSON non viene formattata (Prettier diventa lento). */
 const MAX_FORMAT_CHARS = 2_000_000
@@ -1485,8 +1484,6 @@ export default function App() {
         { label: 'Scorciatoie da tastiera', action: () => setHelp('shortcuts') },
         { label: 'Limiti su questo dispositivo', disabled: !allNotices.length, action: () => setNotices(allNotices) },
         { label: 'Novità delle versioni', action: () => setHelp('changelog') },
-        'separator',
-        { label: 'Codice sorgente su GitHub', action: () => window.open(REPO_URL, '_blank', 'noopener') },
       ],
     },
   ]

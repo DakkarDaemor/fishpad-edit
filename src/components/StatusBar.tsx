@@ -1,10 +1,11 @@
 import { indentLabel, type Indent } from '../editor/indentation'
 import { ENCODING_LABELS, type Encoding } from '../encoding'
-import { languageNames } from '../editor/languages'
+import { commonLanguages, otherLanguages } from '../editor/languages'
 import { hasFsAccess } from '../fs'
 import { hasWorkspace } from '../workspace'
 import type { CursorStatus, Doc } from '../workbench/Workbench'
 import { MenuButton, type MenuItem } from './Menu'
+import { COMPACT_QUERY, useMediaQuery } from './touch'
 
 interface Props {
   doc: Doc | undefined
@@ -28,6 +29,8 @@ const ENCODINGS = Object.keys(ENCODING_LABELS) as Encoding[]
 
 export function StatusBar(props: Props) {
   const { doc, status, onLanguage, onIndent, onRedetectIndent, onConvertIndent, onToggleEol, onEncoding, onReopen, fetching, onRefreshUrl } = props
+  // sul telefono la barra sta su una riga: "12:5" invece di "Ln 12, Col 5", "Sp: 2" invece di "Spazi: 2"
+  const compact = useMediaQuery(COMPACT_QUERY)
   const indentItems = (d: Doc): MenuItem[] => [
     { heading: 'Usa per questo file' },
     ...[false, true].flatMap((tabs) =>
@@ -58,9 +61,9 @@ export function StatusBar(props: Props) {
 
   return (
     <footer className="statusbar">
-      <span>
-        Ln {status.line}, Col {status.col}
-        {status.sel > 0 && ` (${status.sel} selezionati)`}
+      <span title={compact ? 'Riga:colonna' : undefined}>
+        {compact ? `${status.line}:${status.col}` : `Ln ${status.line}, Col ${status.col}`}
+        {status.sel > 0 && (compact ? ` (${status.sel} sel.)` : ` (${status.sel} selezionati)`)}
       </span>
       <span className="status-lines">{status.lines} righe</span>
       {doc?.request && (
@@ -87,13 +90,17 @@ export function StatusBar(props: Props) {
         <>
           <select value={doc.lang ?? ''} onChange={(e) => onLanguage(e.target.value || null)} title="Linguaggio">
             <option value="">Testo semplice</option>
-            {languageNames.map((n) => (
+            {commonLanguages.map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+            <option disabled>──────────</option>
+            {otherLanguages.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
           <MenuButton
             up
-            label={`${indentLabel(doc.indent)}${doc.indentAuto ? '' : ' •'}`}
+            label={`${compact ? indentLabel(doc.indent).replace('Spazi', 'Sp') : indentLabel(doc.indent)}${doc.indentAuto ? '' : ' •'}`}
             title={doc.indentAuto ? 'Indentazione (rilevata dal contenuto)' : 'Indentazione (scelta a mano)'}
             items={indentItems(doc)}
           />

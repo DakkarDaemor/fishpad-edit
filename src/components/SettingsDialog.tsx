@@ -79,6 +79,12 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
                 <input type="checkbox" checked={settings.wrap} onChange={(e) => onChange({ wrap: e.target.checked })} /> A capo automatico
               </label>
               <label className="check">
+                <input type="checkbox" checked={settings.minimap} onChange={(e) => onChange({ minimap: e.target.checked })} /> Minimappa a destra del testo (non sul telefono)
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={settings.previewTheme} onChange={(e) => onChange({ previewTheme: e.target.checked })} /> Anteprima Markdown coi colori del tema
+              </label>
+              <label className="check">
                 <input type="checkbox" checked={settings.typeCheck} onChange={(e) => onChange({ typeCheck: e.target.checked })} /> Controllo dei tipi (TypeScript e TSX)
               </label>
               <div className="check-row">

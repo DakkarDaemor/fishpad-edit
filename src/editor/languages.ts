@@ -13,6 +13,10 @@ export const languageNames: string[] = languages
   .map((l) => l.name)
   .sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }))
 
+/** In cima alla scelta del linguaggio, nell'ordine; sotto, gli altri in ordine alfabetico. */
+export const commonLanguages = ['JavaScript', 'TypeScript', 'HTML', 'CSS', 'JSON', 'Markdown', 'JSX', 'TSX', 'PHP', 'Python', 'SQL', 'YAML', 'XML', 'CSV', 'Shell']
+export const otherLanguages = languageNames.filter((n) => !commonLanguages.includes(n))
+
 export function detectByFilename(filename: string): string | null {
   return LanguageDescription.matchFilename(languages, filename)?.name ?? null
 }

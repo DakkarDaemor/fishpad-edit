@@ -116,10 +116,10 @@ const folderKey = (dir: FileSystemDirectoryHandle) => {
   return folderKeys.get(dir)!
 }
 
-function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck' | 'npmTypes'>, systemDark: boolean): EditorSettings {
+function toEditorSettings(s: Pick<Settings, 'theme' | 'fontSize' | 'wrap' | 'typeCheck' | 'npmTypes' | 'minimap'>, systemDark: boolean): EditorSettings {
   const palette = s.theme in PALETTES ? (s.theme as Palette) : null
   const dark = palette ? PALETTES[palette].dark : s.theme === 'dark' || (s.theme === 'system' && systemDark)
-  return { dark, palette, fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck, npmTypes: s.npmTypes }
+  return { dark, palette, fontSize: s.fontSize, wrap: s.wrap, typeCheck: s.typeCheck, npmTypes: s.npmTypes, minimap: s.minimap }
 }
 
 export default function App() {
@@ -224,7 +224,9 @@ export default function App() {
           }
           setRecents(await addRecent(f.handle))
         }
-        wb.addDoc(f)
+        const doc = wb.addDoc(f)
+        // il Markdown si apre già come anteprima; il menu della tab o Ctrl+Enter mostrano il testo
+        if (doc.lang === 'Markdown') wb.setPreview(wb.activePane.id, doc.id, true)
       }
     })
   }
@@ -267,10 +269,7 @@ export default function App() {
       flash(`File non trovato: ${href}`)
       return
     }
-    const wasOpen = await wb.findByHandle(handle)
     await openHandle(handle)
-    const opened = !wasOpen && (await wb.findByHandle(handle))
-    if (opened && opened.lang === 'Markdown') wb.setPreview(wb.activePane.id, opened.id, true)
   }
 
   /** Testo del documento nella sua codifica; null se l'utente annulla perché la codifica non basta. */
@@ -353,7 +352,7 @@ export default function App() {
         void addVersion(wb.doc(doc.id) ?? doc, wb.content(doc.id), 'salvato')
         flash(`Salvato: ${handle.name}`)
       } else {
-        wb.patchDoc(doc.id, { dirty: false })
+        // una copia scaricata: la tab resta non salvata
         flash(`Scaricato: ${suggested}`)
       }
     } catch (err) {
@@ -1231,10 +1230,10 @@ export default function App() {
   }, [])
 
   // Impostazioni → editor
-  const { theme, fontSize, wrap, typeCheck, npmTypes } = settings
+  const { theme, fontSize, wrap, typeCheck, npmTypes, minimap } = settings
   const editorSettings = useMemo(
-    () => toEditorSettings({ theme, fontSize, wrap, typeCheck, npmTypes }, systemDark),
-    [theme, fontSize, wrap, typeCheck, npmTypes, systemDark],
+    () => toEditorSettings({ theme, fontSize, wrap, typeCheck, npmTypes, minimap }, systemDark),
+    [theme, fontSize, wrap, typeCheck, npmTypes, minimap, systemDark],
   )
   useEffect(() => {
     document.documentElement.dataset.theme = editorSettings.dark ? 'dark' : 'light'
@@ -1549,6 +1548,7 @@ export default function App() {
         tabHost={titleTabs}
         mdAssets={mdAssets}
         mdOpenLink={mdOpenLink}
+        mdTheme={{ key: `${settings.theme}:${editorSettings.dark}`, colors: settings.previewTheme }}
       />
     ) : null
   }

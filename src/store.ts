@@ -20,6 +20,10 @@ export interface Settings {
   typeCheck: boolean
   /** tipi dei pacchetti npm da esm.sh mentre si scrive: spenta, dall'editor non esce niente */
   npmTypes: boolean
+  /** anteprima Markdown nella tab coi colori del tema, invece che bianca */
+  previewTheme: boolean
+  /** minimappa a destra del testo (non sul telefono) */
+  minimap: boolean
   /** barra laterale con preferiti ed esplora file */
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
@@ -51,6 +55,8 @@ export const DEFAULT_SETTINGS: Settings = {
   wrap: false,
   typeCheck: true,
   npmTypes: false,
+  previewTheme: false,
+  minimap: false,
   sidebar: false,
   diff: { collapse: true, normalize: false },
   save: { trimTrailing: false, finalNewline: false },

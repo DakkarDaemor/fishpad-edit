@@ -1,7 +1,7 @@
 import { Annotation, Transaction, type ChangeSet, type EditorState, type TransactionSpec } from '@codemirror/state'
 import { EditorView, type ViewUpdate } from '@codemirror/view'
 import { foldEffect, unfoldEffect } from '@codemirror/language'
-import { createEditorState, languageEffects, setUpdateHandler, settingsEffects, type EditorSettings } from '../editor/setup'
+import { createEditorState, languageEffects, loadMinimap, setUpdateHandler, settingsEffects, type EditorSettings } from '../editor/setup'
 import { serializeFolds } from '../editor/folding'
 import {
   DEFAULT_INDENT,
@@ -342,6 +342,15 @@ export class Workbench {
     return true
   }
 
+  /** Nuovo nome di una tab non collegata a un file; con l'estensione ("note.md") il linguaggio la segue. */
+  rename(docId: string, name: string) {
+    const d = this.docs.get(docId)
+    if (!d) return
+    this.patchDoc(docId, { name })
+    const byName = d.langAuto ? detectByFilename(name) : null
+    if (byName) void this.setLanguage(docId, byName, false)
+  }
+
   setColor(docId: string, color: TabColor | null) {
     this.patchDoc(docId, { color: color ?? undefined })
   }
@@ -364,7 +373,8 @@ export class Workbench {
       langAuto: input.langAuto ?? !byName,
       indent: input.indent ?? detected ?? DEFAULT_INDENT,
       indentAuto: input.indentAuto ?? true,
-      dirty: input.dirty ?? false,
+      // un testo che non sta in un file, in un URL o in una cosa da fare non è salvato da nessuna parte
+      dirty: (input.dirty ?? false) || (!input.handle && !input.request && !input.todoId && input.content.length > 0),
       eol: input.eol,
       encoding: input.encoding ?? 'utf-8',
       handle: input.handle,
@@ -667,6 +677,11 @@ export class Workbench {
 
   setEditorSettings(settings: EditorSettings) {
     this.settings = settings
+    if (settings.minimap) void loadMinimap().then(() => this.settings === settings && this.applySettings(settings))
+    this.applySettings(settings)
+  }
+
+  private applySettings(settings: EditorSettings) {
     // le istanze non visibili si allineano quando vengono mostrate
     for (const view of this.views.values()) view.dispatch({ effects: settingsEffects(settings) })
   }

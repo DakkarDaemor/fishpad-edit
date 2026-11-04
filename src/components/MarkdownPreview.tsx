@@ -34,6 +34,12 @@ function update(html) {
 }
 addEventListener('message', (e) => {
   if (e.source !== parent || e.data?.tag !== '${TAG}') return;
+  if (e.data.theme != null) {
+    let style = document.getElementById('theme');
+    if (!style) document.head.append(style = Object.assign(document.createElement('style'), { id: 'theme' }));
+    style.textContent = e.data.theme;
+    return;
+  }
   update(e.data.html);
   if (e.data.scroll != null) scrollTo(0, e.data.scroll);
 });
@@ -76,6 +82,17 @@ function cached(resolve: AssetResolver): AssetResolver {
   }
 }
 
+/**
+ * Con `colors` sfondo, testo e link del tema (le variabili CSS non entrano nell'iframe); senza, sempre bianca,
+ * anche col sistema scuro (nell'iframe prefers-color-scheme segue il sistema, non l'app).
+ */
+function themeCss(colors: boolean) {
+  if (!colors) return ':root { color-scheme: light; } a { color: #0969da; }'
+  const s = getComputedStyle(document.documentElement)
+  const v = (name: string) => s.getPropertyValue(name).trim()
+  return `:root { color-scheme: ${s.colorScheme}; } body { background: ${v('--bg-editor')}; color: ${v('--fg')}; } a { color: ${v('--accent')}; }`
+}
+
 interface Props {
   wb: Workbench
   paneId: string
@@ -83,10 +100,14 @@ interface Props {
   /** file della cartella aperta per immagini e link relativi (null se la pagina non sta in una cartella) */
   assets?: (docId: string) => Promise<PreviewAssets | null>
   onOpenLink?: (docId: string, href: string) => void
+  /** cambia insieme al tema dell'app */
+  theme: string
+  /** sfondo, testo e link coi colori del tema */
+  themed: boolean
 }
 
 /** Anteprima Markdown al posto del testo in una tab: si aggiorna mentre si scrive, senza lampeggiare. */
-export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props) {
+export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink, theme, themed }: Props) {
   const frame = useRef<HTMLIFrameElement>(null)
   // la pagina vuota si crea una volta sola: il contenuto arriva con postMessage
   const [shell, setShell] = useState<string | null>(null)
@@ -125,6 +146,13 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
 
   useEffect(() => {
     if (!loads) return
+    // dopo che l'app ha applicato il tema nuovo (il suo effetto gira dopo questo)
+    const raf = requestAnimationFrame(() => frame.current?.contentWindow?.postMessage({ tag: TAG, theme: themeCss(themed) }, '*'))
+    return () => cancelAnimationFrame(raf)
+  }, [loads, theme, themed])
+
+  useEffect(() => {
+    if (!loads) return
     let timer: number | undefined
     let gen = 0
     let first = true
@@ -157,7 +185,7 @@ export function MarkdownPreview({ wb, paneId, docId, assets, onOpenLink }: Props
   return shell ? (
     <iframe
       ref={frame}
-      className="md-preview"
+      className={`md-preview${themed ? ' themed' : ''}`}
       title="Anteprima Markdown"
       // i link esterni si aprono come normali pagine del browser, non nella sandbox
       sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"

@@ -12,6 +12,7 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  ViewPlugin,
   type Command,
   type ViewUpdate,
 } from '@codemirror/view'
@@ -76,6 +77,25 @@ export const typeCheckCompartment = new Compartment()
 const typeCheckExtension = (s: EditorSettings) => [typeCheckEnabled.of(s.typeCheck), npmTypesEnabled.of(s.npmTypes)]
 /** Emmet, colori CSS, controllo JSON: dipendono dal linguaggio (vedi web.ts) */
 export const webCompartment = new Compartment()
+export const minimapCompartment = new Compartment()
+
+// la libreria si scarica solo la prima volta che la minimappa si accende (vedi loadMinimap)
+let minimap: Extension | null = null
+const minimapExtension = (s: EditorSettings) => (s.minimap && minimap) || []
+
+/** Carica la minimappa; poi `settingsEffects` la mostra. */
+export async function loadMinimap() {
+  if (minimap) return
+  const { showMinimap } = await import('@replit/codemirror-minimap')
+  minimap = [
+    showMinimap.of({ create: () => ({ dom: document.createElement('div') }), showOverlay: 'mouse-over' }),
+    // la minimappa si disegna solo al primo aggiornamento dopo la sua creazione: gliene si dà uno subito
+    ViewPlugin.define((view) => {
+      const raf = requestAnimationFrame(() => view.dispatch({}))
+      return { destroy: () => cancelAnimationFrame(raf) }
+    }),
+  ]
+}
 
 export interface EditorSettings {
   dark: boolean
@@ -87,6 +107,8 @@ export interface EditorSettings {
   typeCheck: boolean
   /** tipi dei pacchetti npm scaricati da esm.sh */
   npmTypes: boolean
+  /** minimappa a destra del testo */
+  minimap: boolean
 }
 
 // Un solo listener condiviso: gli EditorState delle tab vengono scambiati nella stessa view.
@@ -222,6 +244,7 @@ function baseExtensions(settings: EditorSettings, indent: Indent): Extension[] {
     fontCompartment.of(fontExtension(settings.fontSize)),
     wrapCompartment.of(wrapExtension(settings.wrap)),
     typeCheckCompartment.of(typeCheckExtension(settings)),
+    minimapCompartment.of(minimapExtension(settings)),
     EditorView.updateListener.of((u) => updateHandler?.(u)),
   ]
 }
@@ -249,6 +272,7 @@ export function settingsEffects(settings: EditorSettings) {
     fontCompartment.reconfigure(fontExtension(settings.fontSize)),
     wrapCompartment.reconfigure(wrapExtension(settings.wrap)),
     typeCheckCompartment.reconfigure(typeCheckExtension(settings)),
+    minimapCompartment.reconfigure(minimapExtension(settings)),
   ]
 }
 

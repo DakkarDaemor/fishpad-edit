@@ -32,6 +32,8 @@ interface Props {
   mdAssets?: (docId: string) => Promise<PreviewAssets | null>
   /** link a un altro file Markdown, relativo al documento */
   mdOpenLink?: (docId: string, href: string) => void
+  /** tema dell'app per le anteprime Markdown, e se usarne i colori (vedi MarkdownPreview) */
+  mdTheme: { key: string; colors: boolean }
 }
 
 export interface DraggedTab {
@@ -71,7 +73,15 @@ const EYE = (
   </svg>
 )
 
-export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks, tabHost, mdAssets, mdOpenLink }: Props) {
+/** Le tab dei file prendono il nome dal file, quelle delle note dalla cosa da fare: le altre si rinominano. */
+const canRename = (d: Doc) => !d.handle && !d.todoId
+
+function renameTab(wb: Workbench, d: Doc) {
+  const name = prompt('Nome della tab:', d.name)?.trim()
+  if (name && name !== d.name) wb.rename(d.id, name)
+}
+
+export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, compact, marks, tabHost, mdAssets, mdOpenLink, mdTheme }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLElement>(null)
   const [dropTarget, setDropTarget] = useState(false)
@@ -154,6 +164,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
               e.dataTransfer.effectAllowed = 'copyMove'
             }}
             onClick={() => wb.activate(pane.id, id)}
+            onDoubleClick={() => canRename(d) && renameTab(wb, d)}
             onAuxClick={(e) => e.button === 1 && wb.closeTab(pane.id, id)}
             onContextMenu={(e) => {
               e.preventDefault()
@@ -313,7 +324,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
         </div>
       )}
       <div className="editor" ref={hostRef} hidden={previewing} />
-      {previewing && <MarkdownPreview wb={wb} paneId={pane.id} docId={activeDoc!.id} assets={mdAssets} onOpenLink={mdOpenLink} />}
+      {previewing && <MarkdownPreview wb={wb} paneId={pane.id} docId={activeDoc!.id} assets={mdAssets} onOpenLink={mdOpenLink} theme={mdTheme.key} themed={mdTheme.colors} />}
       {paneDrop && <div className={`pane-drop pane-drop-${paneDrop}`} aria-hidden="true" />}
       {tabMenu && menuDoc && (
         <ContextMenu
@@ -337,6 +348,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
                 ]
               : []),
             ...tabMenuExtra(menuDoc),
+            ...(canRename(menuDoc) ? [{ label: 'Rinomina…', action: () => renameTab(wb, menuDoc) }] : []),
             { heading: 'Colore' },
             ...tabColorItems(menuDoc.color, (c) => wb.setColor(menuDoc.id, c)),
             'separator',

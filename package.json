@@ -1,7 +1,7 @@
 {
   "name": "fishpad-edit",
   "private": true,
-  "version": "18.1.0",
+  "version": "19.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -28,6 +28,7 @@
     "@lezer/common": "^1.5.3",
     "@lezer/highlight": "^1.2.5",
     "@prettier/plugin-php": "^0.26.0",
+    "@replit/codemirror-minimap": "^0.5.2",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "codemirror": "^6.0.2",

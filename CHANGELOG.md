@@ -2,6 +2,16 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 19.0
+
+- **I file Markdown si aprono già come anteprima.** Per scrivere, Ctrl+Enter o il menu della tab («Mostra il testo»).
+- **Anteprima Markdown coi colori del tema**: nuova opzione in Impostazioni → Aspetto. Accesa, l'anteprima nella tab ha lo sfondo, il testo e i link del tema corrente, e lo segue quando lo cambi; spenta, l'anteprima è sempre a fondo bianco (prima diventava scura col sistema operativo scuro).
+- **Minimappa**: nuova opzione in Impostazioni → Aspetto, spenta di default. Mostra a destra del testo una vista in piccolo di tutto il file; passandoci sopra si vede la parte sullo schermo. Si scarica solo la prima volta che la accendi (circa 5 KB) e sul telefono resta nascosta.
+- **Tab rinominabili**: doppio clic sul nome della tab, oppure «Rinomina…» nel menu della tab (sul telefono con la pressione prolungata). Vale per le tab non salvate e per quelle degli URL; i file prendono il nome dal file e le note dalla loro cosa da fare. Con un'estensione nel nome (per esempio `appunti.md`) la tab prende quel linguaggio, e Salva con nome propone quel nome.
+- Le tab con del testo che non sta in nessun file hanno sempre il pallino ●, e chiudendole l'app chiede conferma: anche dopo «Salva» quando il browser può solo scaricare una copia, per i file aperti senza accesso al disco e per le tab riaperte dalla sessione precedente.
+- Sul telefono la barra in fondo è più compatta: la posizione è «12:5» invece di «Ln 12, Col 5» e l'indentazione «Sp: 2» invece di «Spazi: 2».
+- Nella scelta del linguaggio (barra in fondo) i più usati stanno in cima (JavaScript, TypeScript, HTML, CSS, JSON, Markdown…), poi una riga di separazione e gli altri in ordine alfabetico.
+
 ## 18.1
 
 - Il menu Aiuto non ha più il link al codice sorgente su GitHub.

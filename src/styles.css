@@ -279,7 +279,8 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .pane.active .tab.colored.current, .workspace > .pane .tab.colored.current {
   box-shadow: inset 0 3px 0 color-mix(in oklab, var(--tab-color), #000 var(--tab-edge));
 }
-.tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* il clic arriva alla tab: con Shift premuto Chrome trascina solo se il mousedown è sull'elemento trascinabile stesso */
+.tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .tab-close { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; line-height: 1; }
 .tab-close .dot, .tab-close .x { grid-area: 1 / 1; }
 .tab-close .dot { display: none; font-size: 10px; }

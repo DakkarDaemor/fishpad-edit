@@ -11,6 +11,7 @@ Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove
 - Le tab con del testo che non sta in nessun file hanno sempre il pallino ●, e chiudendole l'app chiede conferma: anche dopo «Salva» quando il browser può solo scaricare una copia, per i file aperti senza accesso al disco e per le tab riaperte dalla sessione precedente.
 - Sul telefono la barra in fondo è più compatta: la posizione è «12:5» invece di «Ln 12, Col 5» e l'indentazione «Sp: 2» invece di «Spazi: 2».
 - Nella scelta del linguaggio (barra in fondo) i più usati stanno in cima (JavaScript, TypeScript, HTML, CSS, JSON, Markdown…), poi una riga di separazione e gli altri in ordine alfabetico.
+- Trascinando una tab in un altro pannello con **Shift** premuto la si apre anche lì, senza toglierla da dove era (prima solo con Ctrl, che su Windows spesso non arriva al trascinamento e la tab veniva spostata). È anche nell'elenco delle scorciatoie.
 
 ## 18.1
 

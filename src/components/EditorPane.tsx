@@ -57,7 +57,8 @@ function dropZone(e: DragEvent): PaneDrop {
   const [side, dist] = sides.reduce((a, b) => (b[1] < a[1] ? b : a))
   return dist < 0.25 ? side : 'center'
 }
-const copyDrag = (e: DragEvent) => e.ctrlKey || e.metaKey
+// Ctrl su Windows spesso non arriva durante il trascinamento: vale anche Shift
+const copyDrag = (e: DragEvent) => e.shiftKey || e.ctrlKey || e.metaKey
 
 /** Un pannello: barra delle tab + EditorView di CodeMirror (gestita dal Workbench). */
 function tabTitle(d: Doc) {
@@ -156,7 +157,7 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
             data-doc-id={id}
             className={`tab${id === pane.activeDocId ? ' current' : ''}${d.color ? ' colored' : ''}${isPreview ? ' preview-tab' : ''}`}
             style={d.color ? ({ '--tab-color': tabColorVar(d.color) } as CSSProperties) : undefined}
-            title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Ctrl per aprirla anche lì`}
+            title={touch ? tabTitle(d) : `${tabTitle(d)}\nTrascina in un altro pannello per spostarla, con Shift (o Ctrl) per aprirla anche lì`}
             draggable={!touch}
             onDragStart={(e) => {
               e.dataTransfer.setData(TAB_MIME, JSON.stringify({ docId: id, fromPaneId: pane.id } satisfies DraggedTab))

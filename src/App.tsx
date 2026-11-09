@@ -10,6 +10,7 @@ import { PALETTES, type Palette } from './editor/themes'
 import { detectByFilename, extensionFor } from './editor/languages'
 import { canFormat, formatCode } from './editor/format'
 import * as tx from './editor/transforms'
+import { jiraToMd, mdToJira } from './editor/jira'
 import { DEFAULT_INDENT, indentString } from './editor/indentation'
 import {
   detectEol,
@@ -1396,6 +1397,9 @@ export default function App() {
             'separator',
             { label: 'JSON: ordina chiavi', disabled: !active, action: () => transform((t) => tx.jsonSortKeys(t, indentString(active?.indent ?? DEFAULT_INDENT))) },
             { label: 'JSON: minifica', disabled: !active, action: () => transform(tx.jsonMinify) },
+            'separator',
+            { label: 'Markdown → Jira', disabled: !active, action: () => transform(mdToJira) },
+            { label: 'Jira → Markdown', disabled: !active, action: () => transform(jiraToMd) },
           ],
         },
         'separator',

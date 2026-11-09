@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 20.0
+
+- **Markdown ⇄ Jira**: in Modifica → Trasforma, «Markdown → Jira» e «Jira → Markdown» convertono la selezione o tutto il file. Passano titoli, grassetto, corsivo, barrato, codice in linea e a blocchi (col linguaggio), link, immagini, elenchi anche annidati, citazioni, tabelle e righe orizzontali. Quello che non ha un equivalente prende la cosa più vicina invece di sparire: avvisi `{info}`/`{note}`/`{warning}`/`{tip}` ⇄ avvisi GitHub `> [!NOTE]`, `{panel}` e citazioni di più righe come citazioni, sottolineato/apice/pedice/citazione come HTML semplice, menzioni `[~utente]` come `@utente`, caselle delle task list come ☑ / ☐, note a piè di pagina; il colore lascia il testo, le tabelle Jira senza intestazione ne ricevono una vuota, e `{` e `[` del testo vengono escapati per Jira.
+
 ## 19.0
 
 - **I file Markdown si aprono già come anteprima.** Per scrivere, Ctrl+Enter o il menu della tab («Mostra il testo»).

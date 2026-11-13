@@ -1,6 +1,5 @@
 import { indentLabel, type Indent } from '../editor/indentation'
 import { ENCODING_LABELS, type Encoding } from '../encoding'
-import { commonLanguages, otherLanguages } from '../editor/languages'
 import { hasFsAccess } from '../fs'
 import { hasWorkspace } from '../workspace'
 import type { CursorStatus, Doc } from '../workbench/Workbench'
@@ -10,7 +9,8 @@ import { COMPACT_QUERY, useMediaQuery } from './touch'
 interface Props {
   doc: Doc | undefined
   status: CursorStatus
-  onLanguage: (lang: string | null) => void
+  /** apre la scelta del linguaggio */
+  onLanguage: () => void
   onIndent: (indent: Indent) => void
   onRedetectIndent: () => void
   onConvertIndent: (to: Indent) => void
@@ -88,16 +88,9 @@ export function StatusBar(props: Props) {
       <div className="spacer" />
       {doc && (
         <>
-          <select value={doc.lang ?? ''} onChange={(e) => onLanguage(e.target.value || null)} title="Linguaggio">
-            <option value="">Testo semplice</option>
-            {commonLanguages.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-            <option disabled>──────────</option>
-            {otherLanguages.map((n) => (
-              <option key={n} value={n}>{n}</option>
-            ))}
-          </select>
+          <button className="status-lang" onClick={onLanguage} title="Linguaggio: clic per cambiarlo">
+            {doc.lang ?? 'Testo semplice'}
+          </button>
           <MenuButton
             up
             label={`${compact ? indentLabel(doc.indent).replace('Spazi', 'Sp') : indentLabel(doc.indent)}${doc.indentAuto ? '' : ' •'}`}

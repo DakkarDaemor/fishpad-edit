@@ -7,7 +7,7 @@ import { gotoLine, openSearchPanel } from '@codemirror/search'
 import { openReplacePanel, type EditorSettings } from './editor/setup'
 import { foldLevel } from './editor/folding'
 import { PALETTES, type Palette } from './editor/themes'
-import { detectByFilename, extensionFor } from './editor/languages'
+import { detectByFilename, extensionFor, languageChoices, pushRecentLanguage } from './editor/languages'
 import { canFormat, formatCode } from './editor/format'
 import * as tx from './editor/transforms'
 import { jiraToMd, mdToJira } from './editor/jira'
@@ -136,7 +136,7 @@ export default function App() {
   const [recents, setRecents] = useState<RecentFile[]>([])
   const [toast, setToast] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | 'history' | null>(null)
+  const [palette, setPalette] = useState<'commands' | 'tabs' | 'compare' | 'history' | 'language' | null>(null)
   /** versioni della cronologia locale mostrate nella palette */
   const [historyItems, setHistoryItems] = useState<{ docName: string; items: PaletteItem[] } | null>(null)
   const [diff, setDiff] = useState<DiffState | null>(null)
@@ -1509,6 +1509,21 @@ export default function App() {
   }
 
   /** Le altre tab, per confrontarle con quella attiva. */
+  /** Gli ultimi scelti in cima, poi i più usati, poi gli altri in ordine alfabetico; scrivendo si filtra. */
+  const languageItems = (): PaletteItem[] => {
+    const recent = settings.recentLanguages ?? []
+    return languageChoices(recent).map((lang) => ({
+      id: lang,
+      label: lang || 'Testo semplice',
+      detail: lang === (active?.lang ?? '') ? 'attuale' : recent.includes(lang) ? 'recente' : undefined,
+      run: () => {
+        if (!active) return
+        void wb.setLanguage(active.id, lang || null, false)
+        setSettings((s) => ({ ...s, recentLanguages: pushRecentLanguage(s.recentLanguages ?? [], lang) }))
+      },
+    }))
+  }
+
   const compareItems = (): PaletteItem[] =>
     [...snap.docs.values()]
       .filter((d) => d.id !== active?.id)
@@ -1721,7 +1736,7 @@ export default function App() {
       <StatusBar
         doc={active}
         status={snap.status}
-        onLanguage={(lang) => active && void wb.setLanguage(active.id, lang, false)}
+        onLanguage={() => setPalette('language')}
         onIndent={(indent) => {
           if (active) wb.setIndent(active.id, indent, false)
           wb.activeView?.focus()
@@ -1740,8 +1755,8 @@ export default function App() {
       {palette && (
         <CommandPalette
           key={palette}
-          items={palette === 'commands' ? menuCommands(menus) : palette === 'compare' ? compareItems() : palette === 'history' ? (historyItems?.items ?? []) : tabItems()}
-          placeholder={palette === 'commands' ? 'Cerca un comando…' : palette === 'compare' ? `Confronta «${active?.name ?? ''}» con…` : palette === 'history' ? `Versioni di «${historyItems?.docName ?? ''}»: scegli quella da confrontare` : 'Vai a una tab aperta…'}
+          items={palette === 'commands' ? menuCommands(menus) : palette === 'compare' ? compareItems() : palette === 'history' ? (historyItems?.items ?? []) : palette === 'language' ? languageItems() : tabItems()}
+          placeholder={palette === 'commands' ? 'Cerca un comando…' : palette === 'compare' ? `Confronta «${active?.name ?? ''}» con…` : palette === 'history' ? `Versioni di «${historyItems?.docName ?? ''}»: scegli quella da confrontare` : palette === 'language' ? 'Linguaggio della tab…' : 'Vai a una tab aperta…'}
           onClose={closeOverlay}
         />
       )}

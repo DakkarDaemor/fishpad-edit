@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 20.1
+
+- La scelta del linguaggio nella barra in fondo non è più una tendina lunghissima: un clic apre una casella di ricerca, scrivi qualche lettera (per esempio «py») e Invio. Senza scrivere niente, in cima ci sono gli ultimi 5 linguaggi che hai scelto (segnati «recente»), poi Testo semplice e i più usati, poi tutti gli altri in ordine alfabetico; quello attuale è segnato.
+
 ## 20.0
 
 - **Markdown ⇄ Jira**: in Modifica → Trasforma, «Markdown → Jira» e «Jira → Markdown» convertono la selezione o tutto il file. Passano titoli, grassetto, corsivo, barrato, codice in linea e a blocchi (col linguaggio), link, immagini, elenchi anche annidati, citazioni, tabelle e righe orizzontali. Quello che non ha un equivalente prende la cosa più vicina invece di sparire: avvisi `{info}`/`{note}`/`{warning}`/`{tip}` ⇄ avvisi GitHub `> [!NOTE]`, `{panel}` e citazioni di più righe come citazioni, sottolineato/apice/pedice/citazione come HTML semplice, menzioni `[~utente]` come `@utente`, caselle delle task list come ☑ / ☐, note a piè di pagina; il colore lascia il testo, le tabelle Jira senza intestazione ne ricevono una vuota, e `{` e `[` del testo vengono escapati per Jira.

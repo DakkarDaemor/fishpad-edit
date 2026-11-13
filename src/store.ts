@@ -28,6 +28,8 @@ export interface Settings {
   sidebar: boolean
   /** ultime scelte fatte nel confronto */
   diff: DiffPrefs
+  /** linguaggi scelti a mano di recente, il più recente per primo ('' = testo semplice) */
+  recentLanguages?: string[]
   /** pulizia del testo a ogni salvataggio */
   save: SaveCleanup
   ai: AiSettings

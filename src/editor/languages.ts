@@ -17,6 +17,15 @@ export const languageNames: string[] = languages
 export const commonLanguages = ['JavaScript', 'TypeScript', 'HTML', 'CSS', 'JSON', 'Markdown', 'JSX', 'TSX', 'PHP', 'Python', 'SQL', 'YAML', 'XML', 'CSV', 'Shell']
 export const otherLanguages = languageNames.filter((n) => !commonLanguages.includes(n))
 
+/** Scelta del linguaggio: gli ultimi scelti, poi testo semplice ('') e i più usati, poi gli altri in ordine alfabetico. */
+export function languageChoices(recent: readonly string[]) {
+  const known = recent.filter((l) => l === '' || languageNames.includes(l))
+  return [...new Set([...known, '', ...commonLanguages, ...otherLanguages])]
+}
+
+/** Mette `lang` in testa agli ultimi scelti, senza doppioni, al massimo 5. */
+export const pushRecentLanguage = (recent: readonly string[], lang: string) => [lang, ...recent.filter((l) => l !== lang)].slice(0, 5)
+
 export function detectByFilename(filename: string): string | null {
   return LanguageDescription.matchFilename(languages, filename)?.name ?? null
 }

@@ -692,6 +692,7 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--f
 @media (max-width: 700px) {
   .statusbar { flex-wrap: wrap; gap: 2px 8px; }
   .statusbar select { max-width: 120px; }
+  .status-lang { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* "‹ Editor" dice già dove si è: lo spazio va al nome del file */
   .preview.overlay .panel-title { display: none; }
   .status-lines { display: none; }

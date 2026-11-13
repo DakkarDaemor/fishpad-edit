@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createClient, type AiProvider } from '../ai/providers'
+import { createClient, hasChromeAi, prepareChromeAi, type AiProvider } from '../ai/providers'
 import type { Settings, ThemeMode } from '../store'
 import { PALETTES, type Palette } from '../editor/themes'
 
@@ -146,6 +146,7 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
                 Le chiavi restano in questo browser, salvate in chiaro: chi usa questo profilo del browser può leggerle. Le richieste partono
                 da qui direttamente verso il provider. Il codice eseguito in anteprima e in console non può vederle.
               </p>
+              <ChromeAiToggle on={!!settings.ai.chromeAi} onChange={(chromeAi) => onChange({ ai: { ...settings.ai, chromeAi } })} />
               {settings.ai.providers.map((p) => (
                 <ProviderItem key={p.id} provider={p} onChange={(patch) => setProvider(p.id, patch)} />
               ))}
@@ -154,6 +155,47 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
         </div>
       </div>
     </div>
+  )
+}
+
+/** Interruttore dell'AI di Chrome: accendendolo parte il download del modello, con l'avanzamento. */
+function ChromeAiToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  const [status, setStatus] = useState('')
+  const available = hasChromeAi()
+
+  async function turnOn() {
+    setStatus('Controllo del modello…')
+    try {
+      const state = await prepareChromeAi((loaded) => setStatus(`Download del modello: ${Math.round(loaded * 100)}%`))
+      if (state === 'unavailable') {
+        setStatus('Questo PC non soddisfa i requisiti di Chrome (spazio su disco, GPU o RAM).')
+        return
+      }
+      onChange(true)
+      setStatus('Pronto: lo trovi nel selettore dei modelli della chat.')
+    } catch (err) {
+      setStatus(`Errore: ${(err as Error).message}`)
+    }
+  }
+
+  return (
+    <>
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={on}
+          disabled={!available}
+          onChange={(e) => (e.target.checked ? void turnOn() : (onChange(false), setStatus('')))}
+        />{' '}
+        AI integrata di Chrome (Gemini Nano, gira sul PC)
+      </label>
+      <small className="settings-note">
+        {available
+          ? 'Niente chiave e niente dati in rete. La prima volta Chrome scarica il modello (qualche GB, condiviso con gli altri siti). Va bene per spiegare, riassumere e correggere parti brevi; sul codice lungo è molto meno capace dei provider qui sotto.'
+          : 'Disponibile solo su Chrome per computer, nelle versioni che hanno la Prompt API.'}
+      </small>
+      {status && <small className="settings-note">{status}</small>}
+    </>
   )
 }
 

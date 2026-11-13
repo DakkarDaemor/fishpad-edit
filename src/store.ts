@@ -38,6 +38,8 @@ export interface Settings {
 export interface AiSettings {
   /** chiavi in chiaro in IndexedDB, come gli header dei preferiti URL */
   providers: AiProvider[]
+  /** AI integrata di Chrome nella chat: spenta di default (va scaricato un modello di qualche GB) */
+  chromeAi?: boolean
   /** ultimo modello scelto nella chat */
   model?: { providerId: string; model: string }
 }

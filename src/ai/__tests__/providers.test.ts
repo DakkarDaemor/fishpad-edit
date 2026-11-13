@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_PROVIDERS, cleanKey, createClient, mergeProviders, usableProviders, type AiProvider } from '../providers'
+import { CHROME_PROVIDER, DEFAULT_PROVIDERS, cleanKey, createClient, mergeProviders, usableProviders, type AiProvider } from '../providers'
 
 const groq: AiProvider = { ...DEFAULT_PROVIDERS.find((p) => p.id === 'groq')!, apiKey: ' k ', models: ['m'] }
 
@@ -28,6 +28,29 @@ describe('client compatibile OpenAI', () => {
   it('elenca i modelli in ordine', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [{ id: 'b' }, { id: 'a' }] }))))
     expect(await createClient(groq).listModels()).toEqual(['a', 'b'])
+  })
+})
+
+describe('client Chrome', () => {
+  it('passa sistema e cronologia come prompt iniziali e manda l\'ultima domanda', async () => {
+    const session = { prompt: vi.fn().mockResolvedValue('ok'), destroy: vi.fn() }
+    const create = vi.fn().mockResolvedValue(session)
+    vi.stubGlobal('LanguageModel', { availability: async () => 'available', create })
+    const messages = [
+      { role: 'user' as const, content: 'a' },
+      { role: 'assistant' as const, content: 'b' },
+      { role: 'user' as const, content: 'c' },
+    ]
+    expect(await createClient(CHROME_PROVIDER).chat('gemini-nano', 'sys', messages)).toBe('ok')
+    expect(create.mock.calls[0][0].initialPrompts).toEqual([{ role: 'system', content: 'sys' }, ...messages.slice(0, 2)])
+    expect(session.prompt).toHaveBeenCalledWith('c', { signal: undefined })
+    expect(session.destroy).toHaveBeenCalled()
+  })
+
+  it('testo troppo lungo: messaggio comprensibile', async () => {
+    const err = Object.assign(new Error('quota'), { name: 'QuotaExceededError' })
+    vi.stubGlobal('LanguageModel', { availability: async () => 'available', create: vi.fn().mockRejectedValue(err) })
+    await expect(createClient(CHROME_PROVIDER).chat('gemini-nano', 's', [{ role: 'user', content: 'x' }])).rejects.toThrow('troppo lungo')
   })
 })
 

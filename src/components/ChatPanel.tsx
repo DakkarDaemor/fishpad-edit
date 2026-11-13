@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { createClient, usableProviders } from '../ai/providers'
+import { CHROME_PROVIDER, createClient, hasChromeAi, usableProviders } from '../ai/providers'
 import { deleteChat, listChats, loadChat, saveChat, type ChatEntry, type ChatSummary } from '../ai/chatHistory'
 import { buildSystemPrompt, contextLabel, type TabContext } from '../ai/context'
 import { chatBlocks } from '../ai/markdown'
@@ -54,7 +54,7 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const resize = useSideResize(width, onResize)
 
-  const usable = usableProviders(ai.providers)
+  const usable = [...usableProviders(ai.providers), ...(ai.chromeAi && hasChromeAi() ? [CHROME_PROVIDER] : [])]
   const options = usable.flatMap((p) => p.models.map((m) => ({ provider: p, model: m })))
   const chosen = options.find((o) => o.provider.id === ai.model?.providerId && o.model === ai.model?.model) ?? options[0]
 
@@ -171,6 +171,7 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
           <div className="chat-empty">
             <p>Per usare la chat serve la chiave di almeno un provider, con un modello scelto.</p>
             <p>OpenRouter, Groq e Google Gemini hanno un piano gratuito.</p>
+            {hasChromeAi() && <p>Su Chrome puoi anche accendere l'AI integrata, che gira sul PC senza chiave.</p>}
             <button className="primary" onClick={onOpenSettings}>Impostazioni → AI</button>
           </div>
         ) : (

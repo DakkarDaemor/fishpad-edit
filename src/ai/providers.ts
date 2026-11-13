@@ -1,5 +1,5 @@
 /** Formato delle API: compatibile OpenAI (OpenRouter, Groq, Gemini, OpenAI) o Messages di Anthropic. */
-export type ProviderKind = 'openai' | 'anthropic'
+export type ProviderKind = 'openai' | 'anthropic' | 'chrome'
 
 export interface AiProvider {
   id: string
@@ -52,7 +52,70 @@ export function cleanKey(key: string) {
 }
 
 export function createClient(p: AiProvider): AiClient {
+  if (p.kind === 'chrome') return chromeClient
   return p.kind === 'anthropic' ? anthropicClient(p) : openAiClient(p)
+}
+
+// ---------- Chrome (Gemini Nano, sul PC) ----------
+
+/** Il modello integrato di Chrome: niente chiave, niente rete dopo il primo download. Non sta in DEFAULT_PROVIDERS: si accende con un interruttore. */
+export const CHROME_PROVIDER: AiProvider = { id: 'chrome', name: 'Chrome (sul PC)', kind: 'chrome', baseUrl: '', apiKey: '', models: ['gemini-nano'] }
+
+type Availability = 'unavailable' | 'downloadable' | 'downloading' | 'available'
+interface LmSession {
+  prompt(input: string, opts?: { signal?: AbortSignal }): Promise<string>
+  destroy(): void
+}
+/** la parte della Prompt API che usiamo: non è ancora nei tipi di TypeScript */
+interface LanguageModelApi {
+  availability(): Promise<Availability>
+  create(opts?: {
+    initialPrompts?: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>
+    signal?: AbortSignal
+    monitor?: (m: EventTarget) => void
+  }): Promise<LmSession>
+}
+const lm = () => (globalThis as { LanguageModel?: LanguageModelApi }).LanguageModel
+
+/** Il browser ha la Prompt API (Chrome desktop recente). */
+export const hasChromeAi = () => !!lm()
+
+/** Stato del modello; se va scaricato lo scarica (serve un clic dell'utente), `onProgress` riceve 0..1. */
+export async function prepareChromeAi(onProgress: (loaded: number) => void): Promise<Availability> {
+  const api = lm()
+  if (!api) return 'unavailable'
+  const state = await api.availability()
+  if (state === 'unavailable' || state === 'available') return state
+  const s = await api.create({ monitor: (m) => m.addEventListener('downloadprogress', (e) => onProgress((e as ProgressEvent).loaded)) })
+  s.destroy()
+  return 'available'
+}
+
+const chromeClient: AiClient = {
+  async listModels() {
+    return CHROME_PROVIDER.models
+  },
+  async chat(_model, system, messages, signal) {
+    const api = lm()
+    if (!api) throw new Error("Questo browser non ha l'AI di Chrome")
+    if ((await api.availability()) === 'unavailable') throw new Error("L'AI di Chrome non è disponibile su questo PC (servono spazio su disco e una GPU o RAM sufficienti)")
+    const last = messages.at(-1)
+    if (last?.role !== 'user') throw new Error('Manca la domanda')
+    try {
+      // sessione nuova a ogni domanda: la cronologia passa come prompt iniziali, come per gli altri provider
+      const session = await api.create({ initialPrompts: [{ role: 'system', content: system }, ...messages.slice(0, -1)], signal })
+      try {
+        const text = await session.prompt(last.content, { signal })
+        if (!text.trim()) throw new Error('Il modello ha restituito una risposta vuota')
+        return text
+      } finally {
+        session.destroy()
+      }
+    } catch (err) {
+      if ((err as Error).name === 'QuotaExceededError') throw new Error("Testo troppo lungo per l'AI di Chrome: seleziona solo la parte che ti interessa o inizia una nuova chat")
+      throw err
+    }
+  },
 }
 
 // ---------- compatibile OpenAI ----------

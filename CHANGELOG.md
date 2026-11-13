@@ -2,6 +2,10 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 21.0
+
+- **AI integrata di Chrome**: nuova opzione in Impostazioni → AI, spenta di default e attivabile solo su Chrome per computer. Usa Gemini Nano, che gira sul PC: niente chiave e nessun dato in rete. Accendendola, Chrome scarica il modello la prima volta (qualche GB, condiviso con gli altri siti) e l'avanzamento si vede lì sotto; poi «gemini-nano» compare nel selettore dei modelli della chat. Va bene per spiegare, riassumere e correggere parti brevi; con file lunghi conviene selezionare solo la parte che interessa.
+
 ## 20.1
 
 - La scelta del linguaggio nella barra in fondo non è più una tendina lunghissima: un clic apre una casella di ricerca, scrivi qualche lettera (per esempio «py») e Invio. Senza scrivere niente, in cima ci sono gli ultimi 5 linguaggi che hai scelto (segnati «recente»), poi Testo semplice e i più usati, poi tutti gli altri in ordine alfabetico; quello attuale è segnato.

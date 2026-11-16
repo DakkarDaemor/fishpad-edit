@@ -147,6 +147,9 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
           </button>
           <button className="panel-close" onClick={onClose} title="Chiudi la chat">×</button>
         </header>
+        <div className="chat-context chat-target" title="La domanda manda il contenuto di questa tab">
+          {label ? `Contesto: ${label}` : 'Nessuna tab'}
+        </div>
 
         {past ? (
           <div className="chat-list">
@@ -194,9 +197,7 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
             {error && <div className="chat-error">{error}</div>}
             <div className="chat-input">
               <div className="chat-bar">
-                <span className="chat-context" title="La domanda manda il contenuto di questa tab">
-                  {label ? `Contesto: ${label}` : 'Nessuna tab'}
-                </span>
+                <div className="spacer" />
                 <select
                   aria-label="Modello"
                   value={chosen ? `${chosen.provider.id}${SEP}${chosen.model}` : ''}

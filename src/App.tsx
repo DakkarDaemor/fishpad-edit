@@ -82,6 +82,7 @@ import { DiffDialog, type DiffSide } from './components/DiffDialog'
 import { ChatPanel } from './components/ChatPanel'
 import { SettingsDialog, type SettingsView } from './components/SettingsDialog'
 import { contextLabel, type TabContext } from './ai/context'
+import { paneIds } from './workbench/layout'
 import { addVersion, listVersions, readVersion, sizeLabel, versionLabel } from './history'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
@@ -859,11 +860,24 @@ export default function App() {
     if (!doc || !v) return null
     const s = v.state
     const r = s.selection.main
+    // la tab in primo piano di ogni altro pannello visibile (sul telefono se ne vede uno solo);
+    // la stessa tab aperta in due pannelli si manda una volta sola
+    const seen = new Set([doc.id])
+    const others = compact
+      ? []
+      : paneIds(wb.getSnapshot().layout).flatMap((pid) => {
+          const other = wb.doc(wb.getSnapshot().panes.get(pid)?.activeDocId)
+          const view = wb.viewOf(pid)
+          if (!other || !view || seen.has(other.id)) return []
+          seen.add(other.id)
+          return [{ name: other.name, lang: other.lang, content: withContent ? view.state.doc.toString() : '' }]
+        })
     return {
       name: doc.name,
       lang: doc.lang,
       content: withContent ? s.doc.toString() : '',
       selection: r.empty ? undefined : { text: withContent ? s.sliceDoc(r.from, r.to) : '', fromLine: s.doc.lineAt(r.from).number, toLine: s.doc.lineAt(r.to).number },
+      others,
     }
   }
 
@@ -1287,7 +1301,9 @@ export default function App() {
       </span>
     ) : undefined
   const chatContext = chatOpen ? tabContext(false) : null
-  const chatLabel = chatContext && contextLabel(chatContext)
+  // con più pannelli si dice anche quale, contato nell'ordine in cui stanno a schermo
+  const chatPane = multiPane ? ` · pannello ${paneIds(snap.layout).indexOf(snap.activePaneId) + 1} di ${snap.panes.size}` : ''
+  const chatLabel = chatContext && contextLabel(chatContext) + chatPane
 
   const menus: MenuDef[] = [
     {

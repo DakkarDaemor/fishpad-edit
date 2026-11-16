@@ -27,6 +27,28 @@ describe('buildSystemPrompt', () => {
   })
 })
 
+describe('altri pannelli', () => {
+  const half = 'x'.repeat(MAX_CONTEXT_CHARS / 2)
+  const tab = {
+    name: 'a.ts',
+    lang: 'TypeScript',
+    content: half,
+    others: [
+      { name: 'b.ts', lang: 'TypeScript', content: 'const b = 2' },
+      { name: 'big.txt', lang: null, content: half },
+      { name: 'c.css', lang: 'CSS', content: 'a{}' },
+    ],
+  }
+
+  it('manda quelle che stanno nel limite e dice quali restano fuori', () => {
+    const r = buildSystemPrompt(tab)
+    expect('system' in r && r.system).toContain('const b = 2')
+    expect('system' in r && r.system).toContain('a{}')
+    expect('system' in r && r.system).not.toContain('"big.txt"')
+    expect(contextLabel(tab)).toBe('a.ts + b.ts, c.css (troppo lunghi, esclusi: big.txt)')
+  })
+})
+
 describe('contextLabel', () => {
   it('nome e righe selezionate', () => {
     expect(contextLabel({ name: 'a', lang: null, content: '' })).toBe('a')

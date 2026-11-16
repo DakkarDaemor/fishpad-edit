@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createClient, hasChromeAi, prepareChromeAi, type AiProvider } from '../ai/providers'
 import type { Settings, ThemeMode } from '../store'
 import { PALETTES, type Palette } from '../editor/themes'
+import { COMPACT_QUERY, useMediaQuery } from './touch'
 
 export type SettingsView = 'look' | 'diff' | 'ai'
 
@@ -31,6 +32,7 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const compact = useMediaQuery(COMPACT_QUERY)
   const diff = settings.diff
   const setDiff = (patch: Partial<Settings['diff']>) => onChange({ diff: { ...diff, ...patch } })
   const setSave = (patch: Partial<Settings['save']>) => onChange({ save: { ...settings.save, ...patch } })
@@ -79,7 +81,7 @@ export function SettingsDialog({ settings, view, onView, onChange, onClose }: Pr
                 <input type="checkbox" checked={settings.wrap} onChange={(e) => onChange({ wrap: e.target.checked })} /> A capo automatico
               </label>
               <label className="check">
-                <input type="checkbox" checked={settings.minimap} onChange={(e) => onChange({ minimap: e.target.checked })} /> Minimappa a destra del testo (non sul telefono)
+                <input type="checkbox" checked={settings.minimap && !compact} disabled={compact} onChange={(e) => onChange({ minimap: e.target.checked })} /> Minimappa a destra del testo (non sul telefono)
               </label>
               <label className="check">
                 <input type="checkbox" checked={settings.previewTheme} onChange={(e) => onChange({ previewTheme: e.target.checked })} /> Anteprima Markdown coi colori del tema

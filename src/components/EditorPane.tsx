@@ -203,9 +203,9 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
           </div>
         )
       })}
-      <button className="tab-new" onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
       <div className="spacer" />
       <div className="pane-actions">
+        <button onClick={() => wb.newUntitled(pane.id)} aria-label="Nuova tab" title="Nuova tab">+</button>
         {compact ? (
           compact.onNextPane && (
             <button onClick={compact.onNextPane} title="Passa al pannello successivo" aria-label="Pannello successivo">⇄</button>

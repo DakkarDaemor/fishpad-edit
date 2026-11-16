@@ -5,6 +5,14 @@ export interface TabContext {
   content: string
   /** selezione non vuota, con le righe (da 1) in cui cade */
   selection?: { text: string; fromLine: number; toLine: number }
+  /** le tab in primo piano negli altri pannelli, nell'ordine in cui stanno a schermo */
+  others?: OtherTab[]
+}
+
+export interface OtherTab {
+  name: string
+  lang: string | null
+  content: string
 }
 
 /** Oltre questa lunghezza (circa 50.000 token) il file non si manda: i free tier non reggerebbero. */
@@ -41,12 +49,37 @@ export function buildSystemPrompt(tab: TabContext): { system: string } | { error
   if (sel) {
     system += `\n\nL'utente ha selezionato le righe ${sel.fromLine}-${sel.toLine}; se la domanda non dice altro, riguarda questa parte:\n\n${fence(sel.text, tab.lang)}`
   }
+  const { included } = splitOthers(tab)
+  if (included.length) {
+    system += `\n\nIn altri pannelli l'utente ha aperti anche questi file. La domanda riguarda "${tab.name}" se non dice altro.`
+    for (const o of included) system += `\n\n"${o.name}" (${o.lang ?? 'testo semplice'}):\n\n${fence(o.content, o.lang)}`
+  }
   return { system }
+}
+
+/** Le tab degli altri pannelli che stanno nel limite dopo quella attiva (in ordine), e quelle lasciate fuori. */
+export function splitOthers(tab: TabContext) {
+  // con un file troppo lungo la tab attiva manda solo la selezione
+  let used = tab.content.length > MAX_CONTEXT_CHARS ? (tab.selection?.text.length ?? 0) : tab.content.length
+  const included: OtherTab[] = []
+  const excluded: OtherTab[] = []
+  for (const o of tab.others ?? []) {
+    if (used + o.content.length > MAX_CONTEXT_CHARS) {
+      excluded.push(o)
+    } else {
+      included.push(o)
+      used += o.content.length
+    }
+  }
+  return { included, excluded }
 }
 
 /** Descrizione breve del contesto, mostrata sopra la chat. */
 export function contextLabel(tab: TabContext) {
   const sel = tab.selection
-  if (!sel) return tab.name
-  return sel.fromLine === sel.toLine ? `${tab.name}, riga ${sel.fromLine}` : `${tab.name}, righe ${sel.fromLine}–${sel.toLine}`
+  let label = !sel ? tab.name : sel.fromLine === sel.toLine ? `${tab.name}, riga ${sel.fromLine}` : `${tab.name}, righe ${sel.fromLine}–${sel.toLine}`
+  const { included, excluded } = splitOthers(tab)
+  if (included.length) label += ` + ${included.map((o) => o.name).join(', ')}`
+  if (excluded.length) label += ` (troppo lunghi, esclusi: ${excluded.map((o) => o.name).join(', ')})`
+  return label
 }

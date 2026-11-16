@@ -2,6 +2,14 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 21.1
+
+- Con più pannelli aperti, la chat AI manda anche la tab in primo piano degli altri pannelli (una volta sola se è la stessa), finché il totale sta nel limite; sopra la chat si vede quali file vanno, quali restano fuori perché troppo lunghi e da quale pannello parte la domanda («pannello 2 di 3»). Sul telefono resta solo la tab attiva.
+- La riga «Contesto» della chat è passata in alto, sotto il titolo.
+- Il pannello col focus ha una cornice sottile del colore d'accento.
+- Il «+» per una nuova tab sta con le altre azioni del pannello, sempre visibile a destra anche con tante tab.
+- Sul telefono l'opzione Minimappa nelle Impostazioni è disattivata, visto che lì non si vede.
+
 ## 21.0
 
 - **AI integrata di Chrome**: nuova opzione in Impostazioni → AI, spenta di default e attivabile solo su Chrome per computer. Usa Gemini Nano, che gira sul PC: niente chiave e nessun dato in rete. Accendendola, Chrome scarica il modello la prima volta (qualche GB, condiviso con gli altri siti) e l'avanzamento si vede lì sotto; poi «gemini-nano» compare nel selettore dei modelli della chat. Va bene per spiegare, riassumere e correggere parti brevi; con file lunghi conviene selezionare solo la parte che interessa.

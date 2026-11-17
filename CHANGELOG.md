@@ -2,6 +2,15 @@
 
 Versione `MAJOR.MINOR` (vedi [README](README.md#versioni)): MAJOR sale con nuove funzionalità, MINOR con correzioni.
 
+## 22.0
+
+- **Esporta la chat**: nuovo pulsante «Esporta» in cima alla chat AI, salva la conversazione come file Markdown (domande con file, righe e testo selezionato; risposte col modello che le ha date).
+- **File nel contesto a scelta**: la chat non manda più da sola le tab degli altri pannelli e non cambia file quando cambi tab. In cima alla chat i file del contesto sono chip con la × per toglierli; con «+ File» aggiungi qualsiasi tab aperta. Aprendo la chat con il contesto vuoto ci va la tab attiva. La domanda riguarda la tab attiva se è tra i chip (con la sua selezione, di cui il chip mostra le righe), altrimenti il primo: quel chip è evidenziato. Un clic sul nome di un chip porta in primo piano il suo file e la sua linguetta.
+- Correzione: un sottomenu lungo (come Modifica → Trasforma) usciva dal fondo della finestra e le ultime voci non si raggiungevano; ora sale quanto serve e, se la finestra è troppo bassa, scorre.
+- Correzione: con tante tab, la linguetta mostrata finiva sotto i pulsanti del pannello («+» e divisioni); ora lo scroll si ferma prima.
+- **Timestamp Unix ⇄ data** in Modifica → Trasforma, sulla selezione o su tutto il file: i numeri di 10 cifre (secondi) o 13 (millisecondi) diventano date locali ISO 8601 col fuso (`2026-11-17T14:05:09+01:00`), e le date `AAAA-MM-GG` (con o senza ora e fuso; senza fuso è l'ora locale) tornano timestamp, in millisecondi se la data li ha.
+- Ogni risposta ha un pulsante «Copia» in fondo che copia tutto il testo in Markdown; i blocchi di codice continuano ad avere Copia, Inserisci e Confronta.
+
 ## 21.1
 
 - Con più pannelli aperti, la chat AI manda anche la tab in primo piano degli altri pannelli (una volta sola se è la stessa), finché il totale sta nel limite; sopra la chat si vede quali file vanno, quali restano fuori perché troppo lunghi e da quale pannello parte la domanda («pannello 2 di 3»). Sul telefono resta solo la tab attiva.

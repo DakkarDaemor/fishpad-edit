@@ -36,7 +36,44 @@ export function base64Decode(text: string) {
 export const urlEncode = (text: string) => encodeURIComponent(text)
 export const urlDecode = (text: string) => decodeURIComponent(text.replace(/\+/g, ' '))
 
-type RawJson = { rawJSON?: (s: string) => unknown }
+const pad = (n: number, len = 2) => String(Math.abs(n)).padStart(len, '0')
+
+/** Data locale ISO 8601 con lo scarto dall'UTC, così torna indietro senza ambiguità; i millisecondi solo se `ms`. */
+function localIso(d: Date, ms: boolean) {
+  const off = -d.getTimezoneOffset()
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}${ms ? `.${pad(d.getMilliseconds(), 3)}` : ''}`
+  return `${date}T${time}${off < 0 ? '-' : '+'}${pad(Math.trunc(off / 60))}:${pad(off % 60)}`
+}
+
+/** Ogni timestamp Unix (10 cifre in secondi, 13 in millisecondi) diventa una data locale ISO 8601. */
+export function timestampToDate(text: string) {
+  let found = false
+  const out = text.replace(/\b(\d{10})(\d{3})?\b/g, (_m, s: string, ms?: string) => {
+    found = true
+    return localIso(new Date(Number(s + (ms ?? '000'))), !!ms)
+  })
+  if (!found) throw new Error('nessun timestamp Unix (10 o 13 cifre)')
+  return out
+}
+
+/** Ogni data ISO 8601 (anche con lo spazio al posto della T, senza ora o senza fuso = ora locale) diventa un timestamp Unix: in millisecondi se la data li ha. */
+export function dateToTimestamp(text: string) {
+  let found = false
+  const out = text.replace(
+    /\b(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(\.\d{1,3})?)?)(Z|[+-]\d{2}:?\d{2})?)?\b(?![-:])/g,
+    (m, date: string, time?: string, frac?: string, zone?: string) => {
+      const t = Date.parse(`${date}T${time ?? '00:00'}${zone?.replace(/(\d{2})(\d{2})$/, '$1:$2') ?? ''}`)
+      if (Number.isNaN(t)) return m
+      found = true
+      return String(frac ? t : Math.floor(t / 1000))
+    },
+  )
+  if (!found) throw new Error('nessuna data nel formato AAAA-MM-GG')
+  return out
+}
+
+type RawJson ={ rawJSON?: (s: string) => unknown }
 
 /** JSON.parse che non arrotonda i numeri grandi, dove il browser lo permette (source nel reviver e JSON.rawJSON). */
 function parseExact(text: string): unknown {

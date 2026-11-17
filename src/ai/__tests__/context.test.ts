@@ -27,7 +27,7 @@ describe('buildSystemPrompt', () => {
   })
 })
 
-describe('altri pannelli', () => {
+describe("file aggiunti", () => {
   const half = 'x'.repeat(MAX_CONTEXT_CHARS / 2)
   const tab = {
     name: 'a.ts',

@@ -82,7 +82,6 @@ import { DiffDialog, type DiffSide } from './components/DiffDialog'
 import { ChatPanel } from './components/ChatPanel'
 import { SettingsDialog, type SettingsView } from './components/SettingsDialog'
 import { contextLabel, type TabContext } from './ai/context'
-import { paneIds } from './workbench/layout'
 import { addVersion, listVersions, readVersion, sizeLabel, versionLabel } from './history'
 import { menuCommands, type PaletteItem } from './components/commands'
 import { HelpDialog, type HelpView } from './components/HelpDialog'
@@ -853,31 +852,32 @@ export default function App() {
 
   // ---------- chat ----------
 
-  /** La tab attiva e la sua selezione, da mandare con la domanda. */
+  /** File nel contesto della chat, scelti a mano: non seguono il cambio di tab. */
+  const [chatDocIds, setChatDocIds] = useState<string[]>([])
+  /** All'apertura della chat, se il contesto è vuoto, ci va la tab attiva. */
+  const seedChatDocs = () => setChatDocIds((ids) => (ids.length || !wb.activeDoc ? ids : [wb.activeDoc.id]))
+
+  /**
+   * I file del contesto da mandare con la domanda. Il principale è la tab attiva se è tra questi
+   * (con la sua selezione), altrimenti il primo della lista.
+   */
+  const chatIds = () => chatDocIds.filter((id) => wb.doc(id))
+  const chatMainId = (ids: string[]) => (wb.activeDoc && ids.includes(wb.activeDoc.id) ? wb.activeDoc.id : ids[0])
+
   function tabContext(withContent = true): TabContext | null {
-    const doc = wb.activeDoc
-    const v = wb.activeView
-    if (!doc || !v) return null
-    const s = v.state
-    const r = s.selection.main
-    // la tab in primo piano di ogni altro pannello visibile (sul telefono se ne vede uno solo);
-    // la stessa tab aperta in due pannelli si manda una volta sola
-    const seen = new Set([doc.id])
-    const others = compact
-      ? []
-      : paneIds(wb.getSnapshot().layout).flatMap((pid) => {
-          const other = wb.doc(wb.getSnapshot().panes.get(pid)?.activeDocId)
-          const view = wb.viewOf(pid)
-          if (!other || !view || seen.has(other.id)) return []
-          seen.add(other.id)
-          return [{ name: other.name, lang: other.lang, content: withContent ? view.state.doc.toString() : '' }]
-        })
+    const ids = chatIds()
+    if (!ids.length) return null
+    const active = wb.activeDoc
+    const mainId = chatMainId(ids)
+    const doc = wb.doc(mainId)!
+    const s = mainId === active?.id ? wb.activeView?.state : undefined
+    const r = s?.selection.main
     return {
       name: doc.name,
       lang: doc.lang,
-      content: withContent ? s.doc.toString() : '',
-      selection: r.empty ? undefined : { text: withContent ? s.sliceDoc(r.from, r.to) : '', fromLine: s.doc.lineAt(r.from).number, toLine: s.doc.lineAt(r.to).number },
-      others,
+      content: withContent ? wb.content(mainId) : '',
+      selection: !s || !r || r.empty ? undefined : { text: withContent ? s.sliceDoc(r.from, r.to) : '', fromLine: s.doc.lineAt(r.from).number, toLine: s.doc.lineAt(r.to).number },
+      others: ids.filter((id) => id !== mainId).map((id) => ({ name: wb.doc(id)!.name, lang: wb.doc(id)!.lang, content: withContent ? wb.content(id) : '' })),
     }
   }
 
@@ -890,6 +890,7 @@ export default function App() {
       return
     }
     setChatOpen(true)
+    seedChatDocs()
     setRightTab('chat')
     setPreviewHidden(false)
   }
@@ -897,6 +898,7 @@ export default function App() {
   /** Apre la chat con il cursore nel campo della domanda: riguarda la selezione, se c'è. */
   function askAi() {
     setChatOpen(true)
+    seedChatDocs()
     setRightTab('chat')
     setPreviewHidden(false)
     setChatFocus((n) => n + 1)
@@ -1301,9 +1303,12 @@ export default function App() {
       </span>
     ) : undefined
   const chatContext = chatOpen ? tabContext(false) : null
-  // con più pannelli si dice anche quale, contato nell'ordine in cui stanno a schermo
-  const chatPane = multiPane ? ` · pannello ${paneIds(snap.layout).indexOf(snap.activePaneId) + 1} di ${snap.panes.size}` : ''
-  const chatLabel = chatContext && contextLabel(chatContext) + chatPane
+  // il principale mostra anche le righe selezionate
+  const chatMain = chatMainId(chatIds())
+  const chatFiles = chatIds().map((id) =>
+    id === chatMain && chatContext ? { id, name: contextLabel({ ...chatContext, others: [] }), main: true } : { id, name: wb.doc(id)!.name, main: false },
+  )
+  const chatCandidates = wb.allDocs.filter((d) => !chatDocIds.includes(d.id)).map((d) => ({ id: d.id, name: d.name }))
 
   const menus: MenuDef[] = [
     {
@@ -1410,6 +1415,8 @@ export default function App() {
             { label: 'Decodifica Base64', disabled: !active, action: () => transform(tx.base64Decode) },
             { label: 'Codifica URL', disabled: !active, action: () => transform(tx.urlEncode) },
             { label: 'Decodifica URL', disabled: !active, action: () => transform(tx.urlDecode) },
+            { label: 'Timestamp Unix → data', disabled: !active, action: () => transform(tx.timestampToDate) },
+            { label: 'Data → timestamp Unix', disabled: !active, action: () => transform(tx.dateToTimestamp) },
             'separator',
             { label: 'JSON: ordina chiavi', disabled: !active, action: () => transform((t) => tx.jsonSortKeys(t, indentString(active?.indent ?? DEFAULT_INDENT))) },
             { label: 'JSON: minifica', disabled: !active, action: () => transform(tx.jsonMinify) },
@@ -1710,7 +1717,14 @@ export default function App() {
           <ChatPanel
             ai={settings.ai}
             onModel={(model) => setSettings((s) => ({ ...s, ai: { ...s.ai, model } }))}
-            label={chatLabel}
+            files={chatFiles}
+            candidates={chatCandidates}
+            onAddFile={(id) => setChatDocIds((ids) => [...ids, id])}
+            onRemoveFile={(id) => setChatDocIds((ids) => ids.filter((x) => x !== id))}
+            onShowFile={(id) => {
+              // sul telefono la chat copre l'editor: si toglie di mezzo per far vedere il file
+              if (showDoc(id) && compact) setPreviewHidden(true)
+            }}
             selection={!!chatContext?.selection}
             focusKey={chatFocus}
             getContext={() => tabContext()}

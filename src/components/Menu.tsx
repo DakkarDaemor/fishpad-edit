@@ -21,6 +21,16 @@ export interface MenuDef {
 // mousedown senza preventDefault sposterebbe il focus dall'editor: i comandi (Annulla, Cerca…) devono agire su di lui
 const keepFocus = (e: ReactMouseEvent) => e.preventDefault()
 
+/** Alza il sottomenu appena aperto quanto basta perché non esca dal fondo della finestra (oltre scorre, vedi CSS). */
+function fitSubmenu(li: HTMLElement) {
+  const sub = li.querySelector<HTMLElement>(':scope > .submenu')
+  if (!sub) return
+  sub.style.top = ''
+  const r = sub.getBoundingClientRect()
+  const over = r.bottom - window.innerHeight + 4
+  if (over > 0) sub.style.top = `${sub.offsetTop - Math.min(over, r.top - 4)}px`
+}
+
 /**
  * Voci di un menu. I sottomenu si aprono passandoci sopra o con un clic (al tocco non c'è hover);
  * con `onEnter` invece il clic su un sottomenu lo passa al chiamante, che lo mostra al posto della lista.
@@ -34,16 +44,25 @@ function MenuList({ items, onDone, onEnter }: { items: MenuItem[]; onDone: () =>
         if ('heading' in item) return <li key={i} className="menu-heading">{item.heading}</li>
         const hasSub = !!item.submenu
         return (
-          <li key={i} className={`menu-entry${hasSub ? ' has-sub' : ''}${openSub === i ? ' sub-open' : ''}`} role="none">
+          <li
+            key={i}
+            className={`menu-entry${hasSub ? ' has-sub' : ''}${openSub === i ? ' sub-open' : ''}`}
+            role="none"
+            onMouseEnter={hasSub ? (e) => fitSubmenu(e.currentTarget) : undefined}
+            onFocus={hasSub ? (e) => fitSubmenu(e.currentTarget) : undefined}
+          >
             <button
               role="menuitem"
               className={item.danger ? 'danger' : undefined}
               disabled={item.disabled || (hasSub && item.submenu!.length === 0)}
               onMouseDown={keepFocus}
-              onClick={() => {
+              onClick={(e) => {
                 if (hasSub) {
-                  if (onEnter) onEnter(item)
-                  else setOpenSub(openSub === i ? null : i)
+                  if (onEnter) return onEnter(item)
+                  setOpenSub(openSub === i ? null : i)
+                  // al tocco si apre col clic: va misurato dopo che React l'ha mostrato
+                  const li = e.currentTarget.parentElement!
+                  requestAnimationFrame(() => fitSubmenu(li))
                   return
                 }
                 if (!item.action) return

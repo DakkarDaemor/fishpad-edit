@@ -107,7 +107,11 @@ export function EditorPane({ wb, pane, docs, active, multiPane, tabMenuExtra, co
 
   // con molte tab la barra scorre: la tab mostrata resta in vista
   useEffect(() => {
-    tabsRef.current?.querySelector('.tab.current')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const nav = tabsRef.current
+    if (!nav) return
+    // i pulsanti del pannello stanno fissi a destra sopra le tab: lo scroll si ferma prima, sennò la coprono
+    nav.style.scrollPaddingInlineEnd = `${nav.querySelector<HTMLElement>('.pane-actions')?.offsetWidth ?? 0}px`
+    nav.querySelector('.tab.current')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [pane.activeDocId])
 
   const onDrop = (e: DragEvent) => {

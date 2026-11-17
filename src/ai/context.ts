@@ -5,7 +5,7 @@ export interface TabContext {
   content: string
   /** selezione non vuota, con le righe (da 1) in cui cade */
   selection?: { text: string; fromLine: number; toLine: number }
-  /** le tab in primo piano negli altri pannelli, nell'ordine in cui stanno a schermo */
+  /** altre tab aggiunte a mano al contesto della chat, nell'ordine in cui sono state aggiunte */
   others?: OtherTab[]
 }
 
@@ -51,13 +51,13 @@ export function buildSystemPrompt(tab: TabContext): { system: string } | { error
   }
   const { included } = splitOthers(tab)
   if (included.length) {
-    system += `\n\nIn altri pannelli l'utente ha aperti anche questi file. La domanda riguarda "${tab.name}" se non dice altro.`
+    system += `\n\nL'utente ha aggiunto alla conversazione anche questi file. La domanda riguarda "${tab.name}" se non dice altro.`
     for (const o of included) system += `\n\n"${o.name}" (${o.lang ?? 'testo semplice'}):\n\n${fence(o.content, o.lang)}`
   }
   return { system }
 }
 
-/** Le tab degli altri pannelli che stanno nel limite dopo quella attiva (in ordine), e quelle lasciate fuori. */
+/** Le altre tab aggiunte che stanno nel limite dopo quella attiva (in ordine), e quelle lasciate fuori. */
 export function splitOthers(tab: TabContext) {
   // con un file troppo lungo la tab attiva manda solo la selezione
   let used = tab.content.length > MAX_CONTEXT_CHARS ? (tab.selection?.text.length ?? 0) : tab.content.length

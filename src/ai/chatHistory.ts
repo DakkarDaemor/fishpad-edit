@@ -95,3 +95,16 @@ export function deleteChat(id: string) {
     }, undefined),
   )
 }
+
+/** La conversazione in Markdown, per esportarla: le risposte restano come le ha scritte il modello. */
+export function chatToMarkdown(entries: ChatEntry[]): string {
+  return entries
+    .map((e) => {
+      if (e.role === 'assistant') return `## Risposta${e.model ? ` (${e.provider} · ${e.model})` : ''}\n\n${e.content}`
+      const head = `## Domanda${e.context ? ` — ${e.context}` : ''}`
+      const quote = e.quote ? `\n\n${e.quote.replace(/^/gm, '> ')}` : ''
+      return `${head}${quote}\n\n${e.content}`
+    })
+    .join('\n\n')
+    .concat('\n')
+}

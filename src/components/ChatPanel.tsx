@@ -1,16 +1,29 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CHROME_PROVIDER, createClient, hasChromeAi, usableProviders } from '../ai/providers'
-import { deleteChat, listChats, loadChat, saveChat, type ChatEntry, type ChatSummary } from '../ai/chatHistory'
+import { chatToMarkdown, deleteChat, listChats, loadChat, saveChat, type ChatEntry, type ChatSummary } from '../ai/chatHistory'
 import { buildSystemPrompt, contextLabel, type TabContext } from '../ai/context'
 import { chatBlocks } from '../ai/markdown'
+import { exportFile } from '../fs'
 import type { AiSettings } from '../store'
 import { useSideResize } from './sideResize'
+
+interface FileRef {
+  id: string
+  name: string
+}
 
 interface Props {
   ai: AiSettings
   onModel: (model: NonNullable<AiSettings['model']>) => void
   /** contesto attuale, ricalcolato a ogni render: solo per l'etichetta */
-  label: string | null
+  /** file nel contesto, scelti a mano; `main` è quello su cui verte la domanda (con le righe selezionate) */
+  files: Array<FileRef & { main: boolean }>
+  /** tab aperte che si possono aggiungere */
+  candidates: FileRef[]
+  onAddFile: (id: string) => void
+  onRemoveFile: (id: string) => void
+  /** porta in primo piano la tab del file */
+  onShowFile: (id: string) => void
   /** c'è una selezione: compaiono le domande pronte */
   selection: boolean
   /** cambia quando si chiede di scrivere una domanda: il cursore va nel campo */
@@ -41,7 +54,7 @@ const QUICK: Array<[string, string]> = [
 const now = () => Date.now()
 
 /** Chat a destra: ogni domanda porta con sé la tab attiva (e la selezione) in quel momento. */
-export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext, onInsert, onCompare, onOpenSettings, onClose, width, onResize, overlay, tabs, hidden }: Props) {
+export function ChatPanel({ ai, onModel, files, candidates, onAddFile, onRemoveFile, onShowFile, selection, focusKey, getContext, onInsert, onCompare, onOpenSettings, onClose, width, onResize, overlay, tabs, hidden }: Props) {
   const [entries, setEntries] = useState<ChatEntry[]>([])
   /** la conversazione si salva a ogni risposta con questo id */
   const [chatId, setChatId] = useState<string>(() => crypto.randomUUID())
@@ -71,7 +84,7 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
     if (!question || busy || !chosen) return
     const ctx = getContext()
     if (!ctx) {
-      setError('Nessuna tab aperta')
+      setError('Aggiungi almeno un file al contesto con «+ File»')
       return
     }
     const built = buildSystemPrompt(ctx)
@@ -142,15 +155,42 @@ export function ChatPanel({ ai, onModel, label, selection, focusKey, getContext,
           >
             Chat precedenti
           </button>
+          <button
+            onClick={() => void exportFile(`chat-${new Date().toISOString().slice(0, 10)}.md`, new TextEncoder().encode(chatToMarkdown(entries)))}
+            disabled={!entries.length || !!past}
+            title="Salva la conversazione come file Markdown"
+          >
+            Esporta
+          </button>
           <button onClick={newChat} disabled={(!entries.length && !past) || !!busy} title="Ricomincia da capo (la chat attuale resta tra le precedenti)">
             Nuova chat
           </button>
           <button className="panel-close" onClick={onClose} title="Chiudi la chat">×</button>
         </header>
-        <div className="chat-context chat-target" title="La domanda manda il contenuto di questa tab">
-          {label ? `Contesto: ${label}` : 'Nessuna tab'}
+        <div className="chat-target chat-files">
+          {!files.length && <span className="chat-hint">Nessun file nel contesto</span>}
+          {files.map((f) => (
+            <span key={f.id} className={`chat-chip${f.main ? ' main' : ''}`}>
+              <button className="chat-chip-name" onClick={() => onShowFile(f.id)} title={f.main ? 'La domanda riguarda questo file' : 'Mostra il file'}>
+                {f.name}
+              </button>
+              <button onClick={() => onRemoveFile(f.id)} aria-label={`Togli ${f.name} dal contesto`} title="Togli dal contesto">×</button>
+            </span>
+          ))}
+          {candidates.length > 0 && (
+            <select
+              aria-label="Aggiungi un file al contesto"
+              title="Manda anche questa tab insieme alla domanda"
+              value=""
+              onChange={(e) => e.target.value && onAddFile(e.target.value)}
+            >
+              <option value="">+ File</option>
+              {candidates.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
         </div>
-
         {past ? (
           <div className="chat-list">
             {!past.length && <p className="chat-hint">Nessuna chat salvata. Le chat si salvano da sole a ogni risposta.</p>}
@@ -290,6 +330,7 @@ function Answer({ entry, onInsert, onCompare }: { entry: ChatEntry; onInsert: (c
         <div className="chat-meta">
           {entry.provider} · {entry.model}
           {entry.time && ` · ${new Date(entry.time).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`}
+          <button onClick={() => void navigator.clipboard.writeText(entry.content).catch(() => {})} title="Copia tutta la risposta (in Markdown)">Copia</button>
         </div>
       )}
     </div>

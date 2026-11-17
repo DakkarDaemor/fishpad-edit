@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_CHATS, summarize, upsert, type ChatSummary } from '../chatHistory'
+import { chatToMarkdown, MAX_CHATS, summarize, upsert, type ChatSummary } from '../chatHistory'
 
 describe('summarize', () => {
   it('titolo dalla prima domanda, modelli e file senza ripetizioni', () => {
@@ -37,5 +37,15 @@ describe('upsert', () => {
     const r = upsert(index, s('new'))
     expect(r.index).toHaveLength(MAX_CHATS)
     expect(r.drop).toEqual([`c${MAX_CHATS - 1}`])
+  })
+})
+
+describe('chatToMarkdown', () => {
+  it('domande col contesto e la citazione, risposte col modello', () => {
+    const md = chatToMarkdown([
+      { role: 'user', content: 'cosa fa?', context: 'app.ts, righe 1–2', quote: 'a\nb' },
+      { role: 'assistant', content: 'Somma.', provider: 'Groq', model: 'llama' },
+    ])
+    expect(md).toBe('## Domanda — app.ts, righe 1–2\n\n> a\n> b\n\ncosa fa?\n\n## Risposta (Groq · llama)\n\nSomma.\n')
   })
 })

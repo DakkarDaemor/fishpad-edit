@@ -3,10 +3,12 @@ import {
   base64Decode,
   base64Encode,
   cleanForSave,
+  dateToTimestamp,
   jsonMinify,
   jsonSortKeys,
   reverseLines,
   sortLines,
+  timestampToDate,
   uniqueLines,
   urlDecode,
   urlEncode,
@@ -60,5 +62,26 @@ describe('pulizia al salvataggio', () => {
   it('non tocca un file vuoto né le opzioni spente', () => {
     expect(cleanForSave('', both, null)).toBe('')
     expect(cleanForSave('a  ', { trimTrailing: false, finalNewline: false }, null)).toBe('a  ')
+  })
+})
+
+describe('timestamp Unix', () => {
+  const s = Date.UTC(2026, 10, 17, 13, 5, 9) / 1000
+  it('data con fuso → secondi, con i millisecondi → millisecondi, testo intorno intatto', () => {
+    expect(dateToTimestamp('at 2026-11-17T13:05:09Z ok')).toBe(`at ${s} ok`)
+    expect(dateToTimestamp('2026-11-17 14:05:09+0100')).toBe(String(s))
+    expect(dateToTimestamp('2026-11-17T13:05:09.250Z')).toBe(String(s * 1000 + 250))
+  })
+  it('senza ora né fuso è la mezzanotte locale', () => {
+    expect(dateToTimestamp('2026-11-17')).toBe(String(new Date(2026, 10, 17).getTime() / 1000))
+  })
+  it('secondi e millisecondi → data locale ISO, e ritorno', () => {
+    const d = timestampToDate(`${s}, ${s * 1000 + 250}`)
+    expect(d).toMatch(/^2026-11-17T\d{2}:05:09[+-]\d{2}:\d{2}, 2026-11-17T\d{2}:05:09\.250[+-]\d{2}:\d{2}$/)
+    expect(dateToTimestamp(d)).toBe(`${s}, ${s * 1000 + 250}`)
+  })
+  it('senza niente da convertire è un errore', () => {
+    expect(() => timestampToDate('12345')).toThrow()
+    expect(() => dateToTimestamp('ieri')).toThrow()
   })
 })

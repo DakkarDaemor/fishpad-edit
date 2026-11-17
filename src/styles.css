@@ -228,6 +228,7 @@ select { border-color: var(--border); background: var(--bg-editor); }
 }
 .submenu {
   display: none; position: absolute; top: -5px; left: calc(100% - 4px); z-index: 21;
+  max-height: calc(100vh - 8px); overflow-y: auto;
   background: var(--bg-editor); border: 1px solid var(--border); border-radius: 6px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
 }
@@ -536,7 +537,8 @@ select { border-color: var(--border); background: var(--bg-editor); }
 .chat-code-bar > span { font-family: var(--font-mono); text-transform: lowercase; letter-spacing: 0.02em; }
 .chat-code-bar button { padding: 1px 6px; font-size: 11px; }
 .chat-code pre { margin: 0; padding: 8px; overflow: auto; max-height: 360px; font: 12px/1.5 var(--font-mono); }
-.chat-meta { margin-top: 8px; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--fg-muted); }
+.chat-meta { display: flex; align-items: center; gap: 4px; margin-top: 8px; padding-top: 4px; border-top: 1px dashed var(--border); font-size: 11px; color: var(--fg-muted); }
+.chat-meta button { margin-left: auto; padding: 1px 6px; font-size: 11px; }
 .chat-past { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 6px; }
 .chat-past.current { border-color: var(--accent); }
 .chat-past-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 10px; text-align: left; }
@@ -723,3 +725,9 @@ button.primary:hover { background: color-mix(in srgb, var(--accent) 85%, var(--f
   .palette li { padding: 10px 14px; }
   .gutter { flex-basis: 10px; }
 }
+.chat-files { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 11px; }
+.chat-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; padding: 1px 4px 1px 8px; border: 1px solid color-mix(in srgb, var(--fg-muted) 60%, var(--border)); border-radius: 999px; background: var(--bg); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-chip.main { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--bg)); }
+.chat-chip button { padding: 0 4px; font-size: 12px; line-height: 1; }
+.chat-chip .chat-chip-name { padding: 0; font-size: inherit; color: inherit; background: none; border: none; overflow: hidden; text-overflow: ellipsis; }
+.chat-files select { font-size: 11px; padding: 1px 4px; }
